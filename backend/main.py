@@ -43,7 +43,17 @@ def get_tasks():
 
 @app.post("/api/tasks", response_model=Task)
 def create_task(task: Task):
-    # Placeholder for database logic
+    # For now, append to our in-memory list
+    new_task = {
+        "id": task.id,
+        "title": task.title,
+        "description": task.description,
+        "due_date": task.due_date,
+        "estimated_hours": task.estimated_hours,
+        "status": task.status,
+        "priority": task.priority
+    }
+    MOCK_TASKS.append(new_task)
     return task
 
 @app.post("/api/analyze_risk")
