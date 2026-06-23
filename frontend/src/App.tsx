@@ -308,26 +308,32 @@ function App() {
     }
 
     if (activeTab === 'habits') {
-      const mockHabits = [
-        { name: "LeetCode Daily", streaks: [true, true, false, true, true, false, false] },
-        { name: "Read 10 Pages", streaks: [true, true, true, true, true, true, true] },
-        { name: "Workout", streaks: [false, true, false, true, false, true, false] }
-      ];
+      // In a real app, this would come from state fetched from the backend
+      const userHabits: any[] = []; 
+
       return (
         <div className="glass-panel animate-fade-in" style={{ padding: '32px' }}>
           <h2 style={{ marginBottom: '24px' }}>Habit Tracker (Last 7 Days)</h2>
-          <div style={{ display: 'grid', gap: '20px' }}>
-            {mockHabits.map(habit => (
-              <div key={habit.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-primary)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                <h4 style={{ margin: 0, width: '150px' }}>{habit.name}</h4>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  {habit.streaks.map((done, i) => (
-                    <div key={i} style={{ width: '20px', height: '20px', borderRadius: '50%', background: done ? 'var(--accent-primary)' : 'var(--bg-secondary)', boxShadow: done ? '0 0 8px var(--accent-primary)' : 'none' }}></div>
-                  ))}
+          {userHabits.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+              <div style={{ fontSize: '32px', marginBottom: '16px' }}>🌱</div>
+              <p>You haven't added any habits yet. Start tracking small daily actions to build momentum!</p>
+              <button className="btn-primary hover-lift" style={{ marginTop: '16px' }}>+ Track New Habit</button>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: '20px' }}>
+              {userHabits.map(habit => (
+                <div key={habit.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-primary)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                  <h4 style={{ margin: 0, width: '150px' }}>{habit.name}</h4>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    {habit.streaks.map((done: boolean, i: number) => (
+                      <div key={i} style={{ width: '20px', height: '20px', borderRadius: '50%', background: done ? 'var(--accent-primary)' : 'var(--bg-secondary)', boxShadow: done ? '0 0 8px var(--accent-primary)' : 'none' }}></div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       );
     }
