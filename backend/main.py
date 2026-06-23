@@ -97,6 +97,36 @@ def analyze_risk(task: Task):
             "breakdown": ["Check Ollama connection", "Pull the required model", "Retry task"]
         }
 
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+class ChatRequest(BaseModel):
+    messages: List[ChatMessage]
+    tasks_context: str
+
+@app.post("/api/chat")
+def chat_with_ai(req: ChatRequest):
+    system_prompt = f"""
+    You are an aggressive but supportive AI Execution Coach.
+    You have direct access to the user's task list: {req.tasks_context}
+    
+    Answer the user's questions based on their tasks. If they ask what to do, prioritize tasks with high risk scores.
+    Be concise, direct, and actionable.
+    """
+    
+    # Prepend system prompt to the messages
+    ollama_messages = [{'role': 'system', 'content': system_prompt}]
+    for msg in req.messages:
+        ollama_messages.append({'role': msg.role, 'content': msg.content})
+        
+    try:
+        response = ollama.chat(model='fluffy/l3-8b-stheno-v3.2:q4_k_m', messages=ollama_messages)
+        return {"reply": response['message']['content']}
+    except Exception as e:
+        print(f"Ollama Chat Error: {e}")
+        return {"reply": "I'm having trouble connecting to my local brain. Ensure Ollama is running."}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
