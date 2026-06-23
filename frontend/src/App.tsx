@@ -198,30 +198,35 @@ function App() {
         const replyText = data.reply as string;
 
         // Check if the AI outputted the secret JSON payload to create the task
-        if (replyText.includes('```json') && replyText.includes('"CREATE_TASK"')) {
-          // Extract JSON block
-          const jsonMatch = replyText.match(/```json\n([\s\S]*?)\n```/);
-          if (jsonMatch && jsonMatch[1]) {
-            const parsed = JSON.parse(jsonMatch[1]);
-            if (parsed.action === 'CREATE_TASK' && parsed.task) {
-              setPlannerMessages(prev => [...prev, { role: 'assistant', content: "Got it! Compiling task now..." }]);
-              const aiTask: Task = {
-                id: Math.random().toString(36).substring(7),
-                title: parsed.task.title,
-                estimated_hours: parseFloat(parsed.task.estimated_hours),
-                due_date: parsed.task.due_date,
-                priority: parsed.task.priority
-              };
-              // Add a small delay for dramatic effect so user sees the message
-              setTimeout(() => {
-                createNewTaskAPI(aiTask);
-              }, 1500);
+        if (replyText.includes('"CREATE_TASK"')) {
+          // Extract JSON block robustly (grabs everything from the first { to the last })
+          const jsonMatch = replyText.match(/\{[\s\S]*"CREATE_TASK"[\s\S]*\}/);
+          if (jsonMatch && jsonMatch[0]) {
+            try {
+              const parsed = JSON.parse(jsonMatch[0]);
+              if (parsed.action === 'CREATE_TASK' && parsed.task) {
+                setPlannerMessages(prev => [...prev, { role: 'assistant', content: "Got it! Adding this to your dashboard now..." }]);
+                const aiTask: Task = {
+                  id: Math.random().toString(36).substring(7),
+                  title: parsed.task.title,
+                  estimated_hours: parseFloat(parsed.task.estimated_hours),
+                  due_date: parsed.task.due_date,
+                  priority: parsed.task.priority
+                };
+                // Add a small delay for dramatic effect so user sees the message
+                setTimeout(() => {
+                  createNewTaskAPI(aiTask);
+                }, 1500);
+                return; // Important: return early so we don't render the raw JSON string
+              }
+            } catch (e) {
+              console.error("Failed to parse AI JSON output", e);
             }
           }
-        } else {
-          // Just a normal conversational response
-          setPlannerMessages(prev => [...prev, { role: 'assistant', content: replyText }]);
-        }
+        } 
+        
+        // Normal conversational response (or fallback if JSON parsing failed)
+        setPlannerMessages(prev => [...prev, { role: 'assistant', content: replyText }]);
       } catch (err) {
         setPlannerMessages(prev => [...prev, { role: 'assistant', content: "Network error communicating with local AI." }]);
       } finally {
