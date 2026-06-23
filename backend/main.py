@@ -123,6 +123,50 @@ def chat_with_ai(req: ChatRequest):
         print(f"Ollama Chat Error: {e}")
         return {"reply": "I'm having trouble connecting to my local brain. Ensure Ollama is running."}
 
+class PlannerChatRequest(BaseModel):
+    messages: List[ChatMessage]
+
+@app.post("/api/planner_chat")
+def planner_chat(req: PlannerChatRequest):
+    current_time = datetime.now().isoformat()
+    system_prompt = f"""
+    You are an AI Task Planner. Your goal is to help the user create a highly specific task for their execution dashboard.
+    The current date and time is: {current_time}.
+    
+    You must gather 4 pieces of information from the user through a friendly, natural conversation:
+    1. Title (What they want to do)
+    2. Estimated Hours (How long it will take, a float number e.g. 2.5)
+    3. Priority (must be exactly one of: "critical", "high", "medium", "low")
+    4. Due Date (Convert their relative answer like "tomorrow night" into a strict ISO datetime string based on the current time)
+
+    Ask follow-up questions if any of this information is missing. Keep your responses short and conversational.
+    
+    IMPORTANT TRIGGER: ONCE you have gathered ALL 4 pieces of information, you MUST stop asking questions and output ONLY a JSON block like this, surrounded by triple backticks:
+    ```json
+    {{
+      "action": "CREATE_TASK",
+      "task": {{
+        "title": "Study Biology",
+        "estimated_hours": 2.5,
+        "priority": "high",
+        "due_date": "2026-06-25T15:00:00"
+      }}
+    }}
+    ```
+    Do not add any conversational text after the JSON block.
+    """
+    
+    ollama_messages = [{'role': 'system', 'content': system_prompt}]
+    for msg in req.messages:
+        ollama_messages.append({'role': msg.role, 'content': msg.content})
+        
+    try:
+        response = ollama.chat(model='fluffy/l3-8b-stheno-v3.2:q4_k_m', messages=ollama_messages)
+        return {"reply": response['message']['content']}
+    except Exception as e:
+        print(f"Ollama Chat Error: {e}")
+        return {"reply": "I'm having trouble connecting to the local brain. Ensure Ollama is running."}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

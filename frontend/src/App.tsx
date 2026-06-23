@@ -5,7 +5,7 @@ import './index.css';
 
 // Types
 type Priority = 'critical' | 'high' | 'medium' | 'low';
-type Theme = 'dark' | 'light' | 'ocean';
+type Theme = 'dark' | 'light' | 'ocean' | 'cyberpunk' | 'midnight' | 'forest';
 
 interface Task {
   id: string;
@@ -53,10 +53,21 @@ function App() {
 
   // Modal State
   const [showModal, setShowModal] = useState(false);
+  const [modalTab, setModalTab] = useState<'manual' | 'ai'>('manual');
+  
+  // Manual Form State
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskHours, setNewTaskHours] = useState('1');
   const [newTaskDate, setNewTaskDate] = useState('');
   const [newTaskPriority, setNewTaskPriority] = useState<Priority>('medium');
+
+  // AI Planner State
+  const [plannerMessages, setPlannerMessages] = useState<ChatMessage[]>([
+    { role: 'assistant', content: 'What do you need to get done? Brain dump it here, and I will help you turn it into an actionable task.' }
+  ]);
+  const [plannerInput, setPlannerInput] = useState('');
+  const [isPlanning, setIsPlanning] = useState(false);
+  const plannerEndRef = useRef<HTMLDivElement>(null);
 
   // Listen to Authentication State
   useEffect(() => {
@@ -80,6 +91,10 @@ function App() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
+
+  useEffect(() => {
+    plannerEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [plannerMessages]);
 
   const handleLogin = async () => {
     try {
@@ -131,10 +146,29 @@ function App() {
     }
   };
 
-  const handleCreateTask = async (e: FormEvent) => {
+  // Shared function to actually post the task
+  const createNewTaskAPI = async (taskPayload: Task) => {
+    try {
+      await fetch('http://localhost:8000/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(taskPayload)
+      });
+      setShowModal(false);
+      setPlannerMessages([{ role: 'assistant', content: 'What do you need to get done? Brain dump it here, and I will help you turn it into an actionable task.' }]);
+      setNewTaskTitle('');
+      setNewTaskHours('1');
+      setNewTaskDate('');
+      setNewTaskPriority('medium');
+      fetchTasksAndAnalyze();
+    } catch (err) {
+      console.error("Failed to create task", err);
+    }
+  };
+
+  const handleManualCreateTask = async (e: FormEvent) => {
     e.preventDefault();
     const dueDate = newTaskDate ? new Date(newTaskDate).toISOString() : new Date().toISOString();
-    
     const taskData: Task = {
       id: Math.random().toString(36).substring(7),
       title: newTaskTitle,
@@ -142,22 +176,57 @@ function App() {
       due_date: dueDate,
       priority: newTaskPriority,
     };
+    await createNewTaskAPI(taskData);
+  };
 
-    try {
-      await fetch('http://localhost:8000/api/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(taskData)
-      });
-      
-      setNewTaskTitle('');
-      setNewTaskHours('1');
-      setNewTaskDate('');
-      setNewTaskPriority('medium');
-      setShowModal(false);
-      fetchTasksAndAnalyze();
-    } catch (err) {
-      console.error("Failed to create task", err);
+  const handlePlannerSubmit = async (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && plannerInput.trim()) {
+      const userMessage = plannerInput.trim();
+      setPlannerInput('');
+      const newMessages: ChatMessage[] = [...plannerMessages, { role: 'user', content: userMessage }];
+      setPlannerMessages(newMessages);
+      setIsPlanning(true);
+
+      try {
+        const response = await fetch('http://localhost:8000/api/planner_chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: newMessages })
+        });
+        
+        const data = await response.json();
+        const replyText = data.reply as string;
+
+        // Check if the AI outputted the secret JSON payload to create the task
+        if (replyText.includes('```json') && replyText.includes('"CREATE_TASK"')) {
+          // Extract JSON block
+          const jsonMatch = replyText.match(/```json\n([\s\S]*?)\n```/);
+          if (jsonMatch && jsonMatch[1]) {
+            const parsed = JSON.parse(jsonMatch[1]);
+            if (parsed.action === 'CREATE_TASK' && parsed.task) {
+              setPlannerMessages(prev => [...prev, { role: 'assistant', content: "Got it! Compiling task now..." }]);
+              const aiTask: Task = {
+                id: Math.random().toString(36).substring(7),
+                title: parsed.task.title,
+                estimated_hours: parseFloat(parsed.task.estimated_hours),
+                due_date: parsed.task.due_date,
+                priority: parsed.task.priority
+              };
+              // Add a small delay for dramatic effect so user sees the message
+              setTimeout(() => {
+                createNewTaskAPI(aiTask);
+              }, 1500);
+            }
+          }
+        } else {
+          // Just a normal conversational response
+          setPlannerMessages(prev => [...prev, { role: 'assistant', content: replyText }]);
+        }
+      } catch (err) {
+        setPlannerMessages(prev => [...prev, { role: 'assistant', content: "Network error communicating with local AI." }]);
+      } finally {
+        setIsPlanning(false);
+      }
     }
   };
 
@@ -308,9 +377,7 @@ function App() {
     }
 
     if (activeTab === 'habits') {
-      // In a real app, this would come from state fetched from the backend
       const userHabits: any[] = []; 
-
       return (
         <div className="glass-panel animate-fade-in" style={{ padding: '32px' }}>
           <h2 style={{ marginBottom: '24px' }}>Habit Tracker (Last 7 Days)</h2>
@@ -425,9 +492,9 @@ function App() {
              </div>
           </div>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>Theme Options</p>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {['dark', 'light', 'ocean'].map(t => (
-              <button key={t} onClick={() => setTheme(t as Theme)} style={{ flex: 1, padding: '8px 0', borderRadius: '6px', border: theme === t ? '1px solid var(--accent-primary)' : '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '0.8rem', textTransform: 'capitalize' }}>{t}</button>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {['dark', 'light', 'ocean', 'cyberpunk', 'midnight', 'forest'].map(t => (
+              <button key={t} onClick={() => setTheme(t as Theme)} style={{ flex: '1 1 calc(33.333% - 8px)', padding: '8px 0', borderRadius: '6px', border: theme === t ? '1px solid var(--accent-primary)' : '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '0.8rem', textTransform: 'capitalize' }}>{t}</button>
             ))}
           </div>
         </div>
@@ -473,23 +540,85 @@ function App() {
         </div>
       )}
 
-      {/* New Task Modal */}
+      {/* New Task Modal with Tabs */}
       {showModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div className="glass-panel animate-fade-in" style={{ width: '400px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
-            <div style={{ padding: '24px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 style={{ fontSize: '1.2rem', margin: 0 }}>Create New Task</h2>
-              <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.2rem' }}>&times;</button>
-            </div>
-            <form onSubmit={handleCreateTask} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Task Title</label><input required type="text" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'white' }} placeholder="e.g. Build an OS in 1 hour" /></div>
-              <div style={{ display: 'flex', gap: '16px' }}>
-                <div style={{ flex: 1 }}><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Est. Hours</label><input required type="number" step="0.5" min="0" value={newTaskHours} onChange={e => setNewTaskHours(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'white' }} /></div>
-                <div style={{ flex: 1 }}><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Priority</label><select value={newTaskPriority} onChange={e => setNewTaskPriority(e.target.value as Priority)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'white' }}><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></div>
+          <div className="glass-panel animate-fade-in" style={{ width: '450px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
+            
+            {/* Modal Header & Tabs */}
+            <div style={{ padding: '24px 24px 0 24px', borderBottom: '1px solid var(--border-color)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h2 style={{ fontSize: '1.2rem', margin: 0 }}>Create New Task</h2>
+                <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.2rem' }}>&times;</button>
               </div>
-              <div><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Due Date & Time</label><input required type="datetime-local" value={newTaskDate} onChange={e => setNewTaskDate(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'white' }} /></div>
-              <div style={{ marginTop: '16px', display: 'flex', gap: '12px', justifyContent: 'flex-end' }}><button type="button" onClick={() => setShowModal(false)} style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer' }} className="hover-lift">Cancel</button><button type="submit" className="btn-primary hover-lift">Create Task</button></div>
-            </form>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button 
+                  onClick={() => setModalTab('manual')} 
+                  style={{ 
+                    padding: '8px 16px', background: 'none', border: 'none', cursor: 'pointer',
+                    borderBottom: modalTab === 'manual' ? '2px solid var(--accent-primary)' : '2px solid transparent', 
+                    color: modalTab === 'manual' ? 'var(--text-primary)' : 'var(--text-secondary)' 
+                  }}
+                >
+                  Manual Entry
+                </button>
+                <button 
+                  onClick={() => setModalTab('ai')} 
+                  style={{ 
+                    padding: '8px 16px', background: 'none', border: 'none', cursor: 'pointer',
+                    borderBottom: modalTab === 'ai' ? '2px solid var(--accent-primary)' : '2px solid transparent', 
+                    color: modalTab === 'ai' ? 'var(--text-primary)' : 'var(--text-secondary)', 
+                    display: 'flex', alignItems: 'center', gap: '6px' 
+                  }}
+                >
+                  ✨ AI Task Planner
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Content - Manual */}
+            {modalTab === 'manual' && (
+              <form onSubmit={handleManualCreateTask} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Task Title</label><input required type="text" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'white' }} placeholder="e.g. Build an OS in 1 hour" /></div>
+                <div style={{ display: 'flex', gap: '16px' }}>
+                  <div style={{ flex: 1 }}><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Est. Hours</label><input required type="number" step="0.5" min="0" value={newTaskHours} onChange={e => setNewTaskHours(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'white' }} /></div>
+                  <div style={{ flex: 1 }}><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Priority</label><select value={newTaskPriority} onChange={e => setNewTaskPriority(e.target.value as Priority)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'white' }}><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></div>
+                </div>
+                <div><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Due Date & Time</label><input required type="datetime-local" value={newTaskDate} onChange={e => setNewTaskDate(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'white' }} /></div>
+                <div style={{ marginTop: '16px', display: 'flex', gap: '12px', justifyContent: 'flex-end' }}><button type="button" onClick={() => setShowModal(false)} style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer' }} className="hover-lift">Cancel</button><button type="submit" className="btn-primary hover-lift">Create Task</button></div>
+              </form>
+            )}
+
+            {/* Modal Content - AI Planner */}
+            {modalTab === 'ai' && (
+              <div style={{ padding: '0', display: 'flex', flexDirection: 'column', height: '400px' }}>
+                <div style={{ flex: 1, padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {plannerMessages.map((msg, i) => (
+                    <div key={i} style={{ alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start', background: msg.role === 'user' ? 'var(--accent-primary)' : 'var(--bg-primary)', padding: '10px 14px', borderRadius: '12px', borderBottomRightRadius: msg.role === 'user' ? '4px' : '12px', borderBottomLeftRadius: msg.role === 'assistant' ? '4px' : '12px', fontSize: '0.95rem', border: msg.role === 'assistant' ? '1px solid var(--border-color)' : 'none' }}>
+                      {msg.content}
+                    </div>
+                  ))}
+                  {isPlanning && (
+                    <div style={{ alignSelf: 'flex-start', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', padding: '10px 14px', borderRadius: '12px', borderBottomLeftRadius: '4px', fontSize: '0.95rem' }}>
+                      <span style={{ animation: 'pulse 1.5s infinite' }}>Thinking...</span>
+                    </div>
+                  )}
+                  <div ref={plannerEndRef} />
+                </div>
+                <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border-color)', background: 'var(--bg-secondary)', borderBottomLeftRadius: '16px', borderBottomRightRadius: '16px' }}>
+                  <input 
+                    type="text" 
+                    value={plannerInput}
+                    onChange={e => setPlannerInput(e.target.value)}
+                    onKeyDown={handlePlannerSubmit}
+                    placeholder="Describe your task..." 
+                    style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--accent-primary)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }} 
+                    disabled={isPlanning}
+                  />
+                </div>
+              </div>
+            )}
+            
           </div>
         </div>
       )}
