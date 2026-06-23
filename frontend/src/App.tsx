@@ -176,7 +176,7 @@ function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: [...chatMessages, { role: 'user', content: userMessage }],
-            tasks_context: tasksContext
+            tasks_context: tasksContext || "User has no tasks currently."
           })
         });
         
@@ -272,7 +272,12 @@ function App() {
                 </div>
               </div>
             )) : (
-              <p style={{ color: 'var(--text-secondary)' }}>No tasks found. Add one to get started!</p>
+              <div style={{ textAlign: 'center', padding: '64px', background: 'var(--bg-secondary)', borderRadius: '16px', border: '1px dashed var(--border-color)', animation: 'fadeIn 0.5s' }}>
+                <div style={{ width: '64px', height: '64px', background: 'var(--bg-primary)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: '24px' }}>🎯</div>
+                <h3 style={{ marginBottom: '8px' }}>Your dashboard is completely clear</h3>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>Add a new task to let your local Ollama AI coach analyze your schedule and predict failure risks.</p>
+                <button className="btn-primary hover-lift" onClick={() => setShowModal(true)}>+ Create First Task</button>
+              </div>
             )}
           </div>
         </>
@@ -283,15 +288,21 @@ function App() {
       return (
         <div className="glass-panel animate-fade-in" style={{ padding: '32px' }}>
           <h2 style={{ marginBottom: '24px' }}>Timeline & Schedule</h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', borderLeft: '2px solid var(--border-color)', paddingLeft: '24px', marginLeft: '12px' }}>
-            {tasks.sort((a,b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()).map(task => (
-              <div key={task.id} style={{ position: 'relative' }}>
-                <div style={{ position: 'absolute', left: '-33px', top: '4px', width: '16px', height: '16px', borderRadius: '50%', background: `var(--priority-${task.priority})`, border: '3px solid var(--bg-primary)' }}></div>
-                <h4 style={{ margin: 0, fontSize: '1.1rem' }}>{task.title}</h4>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: '4px 0 0' }}>Due {formatDate(task.due_date)}</p>
-              </div>
-            ))}
-          </div>
+          {tasks.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+              <p>No upcoming deadlines. Your schedule is wide open!</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', borderLeft: '2px solid var(--border-color)', paddingLeft: '24px', marginLeft: '12px' }}>
+              {tasks.sort((a,b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()).map(task => (
+                <div key={task.id} style={{ position: 'relative' }}>
+                  <div style={{ position: 'absolute', left: '-33px', top: '4px', width: '16px', height: '16px', borderRadius: '50%', background: `var(--priority-${task.priority})`, border: '3px solid var(--bg-primary)' }}></div>
+                  <h4 style={{ margin: 0, fontSize: '1.1rem' }}>{task.title}</h4>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: '4px 0 0' }}>Due {formatDate(task.due_date)}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       );
     }
@@ -330,7 +341,9 @@ function App() {
           </div>
           <div style={{ flex: 1, padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div style={{ alignSelf: 'flex-start', background: 'var(--bg-secondary)', padding: '16px', borderRadius: '16px', borderBottomLeftRadius: '4px', maxWidth: '80%' }}>
-              Welcome to your dedicated coaching session. I have full context of your calendar and tasks. What's blocking you today?
+              {tasks.length > 0 
+                ? "Welcome to your dedicated coaching session. I have full context of your calendar and tasks. What's blocking you today?"
+                : "Welcome! Your schedule is completely clear right now. Add some tasks, and I will help you formulate an execution strategy."}
             </div>
             {chatMessages.map((msg, i) => (
               <div key={i} style={{ 
@@ -420,13 +433,13 @@ function App() {
             <h1 style={{ fontSize: '2rem', marginBottom: '8px' }}>Good evening, {user?.displayName ? user.displayName.split(' ')[0] : 'there'}.</h1>
             <p style={{ color: 'var(--text-secondary)' }}>You have {tasks.length} active tasks.</p>
           </div>
-          <button className="btn-primary" onClick={() => setShowModal(true)}>+ New Task</button>
+          <button className="btn-primary hover-lift" onClick={() => setShowModal(true)}>+ New Task</button>
         </header>
         {renderContent()}
       </main>
 
-      {/* Floating Chat Widget - Hidden on AI Coach tab */}
-      {activeTab !== 'ai coach' && (
+      {/* Floating Chat Widget - Hidden on AI Coach tab and when no tasks */}
+      {activeTab !== 'ai coach' && tasks.length > 0 && (
         <div className="glass-panel" style={{ position: 'fixed', bottom: '32px', right: '32px', width: '350px', height: '450px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.4)', zIndex: 100 }}>
           <div style={{ padding: '16px', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-glass)' }}>
             <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -436,7 +449,7 @@ function App() {
           </div>
           <div style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div style={{ background: 'var(--bg-secondary)', padding: '12px', borderRadius: '12px', borderBottomLeftRadius: '2px', fontSize: '0.9rem' }}>
-              Hey {user?.displayName ? user.displayName.split(' ')[0] : 'there'}. Need an emergency action plan? Just ask!
+              Hey {user?.displayName ? user.displayName.split(' ')[0] : 'there'}. I'm analyzing your dashboard. Let me know if you need an emergency action plan.
             </div>
             {chatMessages.map((msg, i) => (
               <div key={i} style={{ alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start', background: msg.role === 'user' ? 'var(--accent-primary)' : 'var(--bg-secondary)', padding: '10px 12px', borderRadius: '12px', borderBottomRightRadius: msg.role === 'user' ? '4px' : '12px', borderBottomLeftRadius: msg.role === 'assistant' ? '4px' : '12px', fontSize: '0.9rem' }}>
@@ -457,19 +470,19 @@ function App() {
       {/* New Task Modal */}
       {showModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div className="glass-panel" style={{ width: '400px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
+          <div className="glass-panel animate-fade-in" style={{ width: '400px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
             <div style={{ padding: '24px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h2 style={{ fontSize: '1.2rem', margin: 0 }}>Create New Task</h2>
               <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.2rem' }}>&times;</button>
             </div>
             <form onSubmit={handleCreateTask} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Task Title</label><input required type="text" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'white' }} /></div>
+              <div><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Task Title</label><input required type="text" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'white' }} placeholder="e.g. Build an OS in 1 hour" /></div>
               <div style={{ display: 'flex', gap: '16px' }}>
                 <div style={{ flex: 1 }}><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Est. Hours</label><input required type="number" step="0.5" min="0" value={newTaskHours} onChange={e => setNewTaskHours(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'white' }} /></div>
                 <div style={{ flex: 1 }}><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Priority</label><select value={newTaskPriority} onChange={e => setNewTaskPriority(e.target.value as Priority)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'white' }}><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></div>
               </div>
               <div><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Due Date & Time</label><input required type="datetime-local" value={newTaskDate} onChange={e => setNewTaskDate(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'white' }} /></div>
-              <div style={{ marginTop: '16px', display: 'flex', gap: '12px', justifyContent: 'flex-end' }}><button type="button" onClick={() => setShowModal(false)} style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer' }}>Cancel</button><button type="submit" className="btn-primary">Create Task</button></div>
+              <div style={{ marginTop: '16px', display: 'flex', gap: '12px', justifyContent: 'flex-end' }}><button type="button" onClick={() => setShowModal(false)} style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer' }} className="hover-lift">Cancel</button><button type="submit" className="btn-primary hover-lift">Create Task</button></div>
             </form>
           </div>
         </div>

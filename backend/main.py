@@ -26,11 +26,7 @@ class Task(BaseModel):
     status: str = "pending"
     priority: str = "medium"
 
-MOCK_TASKS = [
-    { "id": "1", "title": "DSA Assignment", "priority": "critical", "estimated_hours": 5.0, "due_date": datetime.now().isoformat() },
-    { "id": "2", "title": "Review System Design", "priority": "high", "estimated_hours": 3.0, "due_date": datetime.now().isoformat() },
-    { "id": "3", "title": "Pay Electricity Bill", "priority": "medium", "estimated_hours": 0.5, "due_date": datetime.now().isoformat() },
-]
+MOCK_TASKS = []
 
 @app.get("/")
 def read_root():
