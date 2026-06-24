@@ -5,7 +5,7 @@ import './index.css';
 
 // Types
 type Priority = 'critical' | 'high' | 'medium' | 'low';
-type Theme = 'dark' | 'light' | 'ocean' | 'cyberpunk' | 'midnight' | 'forest';
+type Theme = 'dark' | 'light' | 'ocean' | 'cyberpunk' | 'midnight' | 'forest' | 'nuclear';
 
 interface Task {
   id: string;
@@ -14,6 +14,7 @@ interface Task {
   priority: Priority;
   estimated_hours: number;
   due_date: string;
+  status: 'pending' | 'completed';
 }
 
 interface RiskAnalysis {
@@ -69,6 +70,13 @@ function App() {
   const [isPlanning, setIsPlanning] = useState(false);
   const plannerEndRef = useRef<HTMLDivElement>(null);
 
+  // Lockdown State
+  const [lockdownChat, setLockdownChat] = useState<ChatMessage[]>([
+    { role: 'assistant', content: 'You have failed to meet a deadline. Explain what happened before I unlock the dashboard.' }
+  ]);
+  const [lockdownInput, setLockdownInput] = useState('');
+  const lockdownEndRef = useRef<HTMLDivElement>(null);
+
   // Listen to Authentication State
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -81,20 +89,23 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  // Apply theme on change
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
-  }, [theme]);
+  // Calculate overdue tasks to trigger lockdown
+  const overdueTasks = tasks.filter(t => t.status !== 'completed' && new Date(t.due_date) < new Date());
+  const isLockdown = overdueTasks.length > 0;
 
-  // Scroll chat to bottom
+  // Apply theme on change (or force nuclear if lockdown)
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages]);
+    if (isLockdown) {
+      document.documentElement.setAttribute('data-theme', 'nuclear');
+    } else {
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem('theme', theme);
+    }
+  }, [theme, isLockdown]);
 
-  useEffect(() => {
-    plannerEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [plannerMessages]);
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages]);
+  useEffect(() => { plannerEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [plannerMessages]);
+  useEffect(() => { lockdownEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [lockdownChat]);
 
   const handleLogin = async () => {
     try {
@@ -127,6 +138,10 @@ function App() {
       setLoading(false);
 
       initialTasks.forEach(async (task) => {
+        if (task.status === 'completed') {
+          setTasks(prevTasks => prevTasks.map(t => t.id === task.id ? { ...t, isAnalyzing: false } : t));
+          return;
+        }
         try {
           const riskResponse = await fetch('http://localhost:8000/api/analyze_risk', {
             method: 'POST',
@@ -146,7 +161,6 @@ function App() {
     }
   };
 
-  // Shared function to actually post the task
   const createNewTaskAPI = async (taskPayload: Task) => {
     try {
       await fetch('http://localhost:8000/api/tasks', {
@@ -166,6 +180,19 @@ function App() {
     }
   };
 
+  const completeTaskAPI = async (taskId: string) => {
+    try {
+      await fetch(`http://localhost:8000/api/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'completed' })
+      });
+      fetchTasksAndAnalyze();
+    } catch (err) {
+      console.error("Failed to update task", err);
+    }
+  };
+
   const handleManualCreateTask = async (e: FormEvent) => {
     e.preventDefault();
     const dueDate = newTaskDate ? new Date(newTaskDate).toISOString() : new Date().toISOString();
@@ -175,6 +202,7 @@ function App() {
       estimated_hours: parseFloat(newTaskHours),
       due_date: dueDate,
       priority: newTaskPriority,
+      status: 'pending'
     };
     await createNewTaskAPI(taskData);
   };
@@ -197,9 +225,7 @@ function App() {
         const data = await response.json();
         const replyText = data.reply as string;
 
-        // Check if the AI outputted the secret JSON payload to create the task
         if (replyText.includes('"CREATE_TASK"')) {
-          // Extract JSON block robustly (grabs everything from the first { to the last })
           const jsonMatch = replyText.match(/\{[\s\S]*"CREATE_TASK"[\s\S]*\}/);
           if (jsonMatch && jsonMatch[0]) {
             try {
@@ -211,26 +237,45 @@ function App() {
                   title: parsed.task.title,
                   estimated_hours: parseFloat(parsed.task.estimated_hours),
                   due_date: parsed.task.due_date,
-                  priority: parsed.task.priority
+                  priority: parsed.task.priority,
+                  status: 'pending'
                 };
-                // Add a small delay for dramatic effect so user sees the message
-                setTimeout(() => {
-                  createNewTaskAPI(aiTask);
-                }, 1500);
-                return; // Important: return early so we don't render the raw JSON string
+                setTimeout(() => { createNewTaskAPI(aiTask); }, 1500);
+                return;
               }
             } catch (e) {
               console.error("Failed to parse AI JSON output", e);
             }
           }
         } 
-        
-        // Normal conversational response (or fallback if JSON parsing failed)
         setPlannerMessages(prev => [...prev, { role: 'assistant', content: replyText }]);
       } catch (err) {
         setPlannerMessages(prev => [...prev, { role: 'assistant', content: "Network error communicating with local AI." }]);
       } finally {
         setIsPlanning(false);
+      }
+    }
+  };
+
+  const handleLockdownSubmit = async (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && lockdownInput.trim()) {
+      const userMessage = lockdownInput.trim();
+      setLockdownInput('');
+      setLockdownChat(prev => [...prev, { role: 'user', content: userMessage }]);
+      
+      try {
+        const response = await fetch('http://localhost:8000/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [...lockdownChat, { role: 'user', content: userMessage }],
+            tasks_context: `User missed deadline for task: ${overdueTasks[0]?.title}. Scold them aggressively.`
+          })
+        });
+        const data = await response.json();
+        setLockdownChat(prev => [...prev, { role: 'assistant', content: data.reply }]);
+      } catch (err) {
+        setLockdownChat(prev => [...prev, { role: 'assistant', content: "System error." }]);
       }
     }
   };
@@ -242,7 +287,7 @@ function App() {
       setChatMessages(prev => [...prev, { role: 'user', content: userMessage }]);
       setIsChatting(true);
 
-      const tasksContext = tasks.map(t => `[${t.priority.toUpperCase()}] ${t.title} (Risk: ${t.riskAnalysis?.risk_score}%, Due: ${t.due_date})`).join(' | ');
+      const tasksContext = tasks.filter(t => t.status !== 'completed').map(t => `[${t.priority.toUpperCase()}] ${t.title} (Risk: ${t.riskAnalysis?.risk_score}%, Due: ${t.due_date})`).join(' | ');
 
       try {
         const response = await fetch('http://localhost:8000/api/chat', {
@@ -288,7 +333,40 @@ function App() {
     );
   }
 
-  const criticalTask = tasks.find(t => !t.isAnalyzing && t.riskAnalysis && t.riskAnalysis.risk_score > 70);
+  // ----------------------------------------------------
+  // NUCLEAR LOCKDOWN SCREEN
+  // ----------------------------------------------------
+  if (isLockdown) {
+    return (
+      <div style={{ height: '100vh', width: '100vw', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)', color: 'var(--text-primary)', flexDirection: 'column' }}>
+        <h1 style={{ color: 'var(--priority-critical)', fontSize: '3rem', textTransform: 'uppercase', marginBottom: '16px', letterSpacing: '4px', animation: 'pulse 2s infinite' }}>System Lockdown</h1>
+        <p style={{ fontSize: '1.2rem', marginBottom: '32px' }}>You failed to meet your deadline for: <strong>{overdueTasks[0].title}</strong></p>
+        
+        <div className="glass-panel" style={{ width: '600px', height: '400px', display: 'flex', flexDirection: 'column', background: 'var(--bg-secondary)', border: '2px solid var(--border-color)', boxShadow: '0 0 50px rgba(239, 68, 68, 0.4)' }}>
+          <div style={{ flex: 1, padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {lockdownChat.map((msg, i) => (
+              <div key={i} style={{ alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start', background: msg.role === 'user' ? 'var(--accent-primary)' : 'var(--bg-primary)', border: msg.role === 'assistant' ? '1px solid var(--border-color)' : 'none', padding: '16px', borderRadius: '16px', maxWidth: '80%', borderBottomRightRadius: msg.role === 'user' ? '4px' : '16px', borderBottomLeftRadius: msg.role === 'assistant' ? '4px' : '16px', lineHeight: 1.5 }}>
+                {msg.content}
+              </div>
+            ))}
+            <div ref={lockdownEndRef} />
+          </div>
+          <div style={{ padding: '24px', borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <input type="text" value={lockdownInput} onChange={e => setLockdownInput(e.target.value)} onKeyDown={handleLockdownSubmit} placeholder="Explain yourself to the AI Coach..." style={{ width: '100%', padding: '16px', borderRadius: '12px', border: '1px solid var(--accent-primary)', background: 'var(--bg-primary)', color: 'white', fontSize: '1rem', outline: 'none' }} />
+            <button className="btn-primary hover-lift" onClick={() => completeTaskAPI(overdueTasks[0].id)} style={{ width: '100%', background: 'var(--priority-critical)', boxShadow: '0 4px 14px 0 rgba(239, 68, 68, 0.4)' }}>
+              Mark "{overdueTasks[0].title}" as Completed to Unlock Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ----------------------------------------------------
+  // MAIN APP
+  // ----------------------------------------------------
+  const pendingTasks = tasks.filter(t => t.status !== 'completed');
+  const criticalTask = pendingTasks.find(t => !t.isAnalyzing && t.riskAnalysis && t.riskAnalysis.risk_score > 70);
 
   const renderContent = () => {
     if (loading) return <p style={{ color: 'var(--text-secondary)' }}>Loading tasks from backend...</p>;
@@ -316,10 +394,15 @@ function App() {
 
           <h3 style={{ marginBottom: '16px' }}>Dynamic Priority List</h3>
           <div style={{ display: 'grid', gap: '16px' }}>
-            {tasks.length > 0 ? tasks.map(task => (
+            {pendingTasks.length > 0 ? pendingTasks.map(task => (
               <div key={task.id} className="glass-panel hover-lift animate-fade-in" style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
-                  <span className={`priority-dot ${task.priority}`}></span>
+                  <button 
+                    onClick={() => completeTaskAPI(task.id)}
+                    style={{ width: '24px', height: '24px', borderRadius: '50%', border: `2px solid var(--priority-${task.priority})`, background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    className="hover-lift"
+                    title="Mark as complete"
+                  ></button>
                   <div>
                     <h4 style={{ fontSize: '1.1rem', marginBottom: '4px' }}>{task.title}</h4>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
@@ -362,13 +445,13 @@ function App() {
       return (
         <div className="glass-panel animate-fade-in" style={{ padding: '32px' }}>
           <h2 style={{ marginBottom: '24px' }}>Timeline & Schedule</h2>
-          {tasks.length === 0 ? (
+          {pendingTasks.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
               <p>No upcoming deadlines. Your schedule is wide open!</p>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', borderLeft: '2px solid var(--border-color)', paddingLeft: '24px', marginLeft: '12px' }}>
-              {tasks.sort((a,b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()).map(task => (
+              {pendingTasks.sort((a,b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()).map(task => (
                 <div key={task.id} style={{ position: 'relative' }}>
                   <div style={{ position: 'absolute', left: '-33px', top: '4px', width: '16px', height: '16px', borderRadius: '50%', background: `var(--priority-${task.priority})`, border: '3px solid var(--bg-primary)' }}></div>
                   <h4 style={{ margin: 0, fontSize: '1.1rem' }}>{task.title}</h4>
@@ -419,7 +502,7 @@ function App() {
           </div>
           <div style={{ flex: 1, padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div style={{ alignSelf: 'flex-start', background: 'var(--bg-secondary)', padding: '16px', borderRadius: '16px', borderBottomLeftRadius: '4px', maxWidth: '80%' }}>
-              {tasks.length > 0 
+              {pendingTasks.length > 0 
                 ? "Welcome to your dedicated coaching session. I have full context of your calendar and tasks. What's blocking you today?"
                 : "Welcome! Your schedule is completely clear right now. Add some tasks, and I will help you formulate an execution strategy."}
             </div>
@@ -509,15 +592,15 @@ function App() {
         <header style={{ marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h1 style={{ fontSize: '2rem', marginBottom: '8px' }}>Good evening, {user?.displayName ? user.displayName.split(' ')[0] : 'there'}.</h1>
-            <p style={{ color: 'var(--text-secondary)' }}>You have {tasks.length} active tasks.</p>
+            <p style={{ color: 'var(--text-secondary)' }}>You have {pendingTasks.length} active tasks.</p>
           </div>
           <button className="btn-primary hover-lift" onClick={() => setShowModal(true)}>+ New Task</button>
         </header>
         {renderContent()}
       </main>
 
-      {/* Floating Chat Widget - Hidden on AI Coach tab and when no tasks */}
-      {activeTab !== 'ai coach' && tasks.length > 0 && (
+      {/* Floating Chat Widget */}
+      {activeTab !== 'ai coach' && pendingTasks.length > 0 && (
         <div className="glass-panel" style={{ position: 'fixed', bottom: '32px', right: '32px', width: '350px', height: '450px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.4)', zIndex: 100 }}>
           <div style={{ padding: '16px', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-glass)' }}>
             <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -545,43 +628,21 @@ function App() {
         </div>
       )}
 
-      {/* New Task Modal with Tabs */}
+      {/* New Task Modal */}
       {showModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div className="glass-panel animate-fade-in" style={{ width: '450px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
-            
-            {/* Modal Header & Tabs */}
             <div style={{ padding: '24px 24px 0 24px', borderBottom: '1px solid var(--border-color)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                 <h2 style={{ fontSize: '1.2rem', margin: 0 }}>Create New Task</h2>
                 <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.2rem' }}>&times;</button>
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
-                <button 
-                  onClick={() => setModalTab('manual')} 
-                  style={{ 
-                    padding: '8px 16px', background: 'none', border: 'none', cursor: 'pointer',
-                    borderBottom: modalTab === 'manual' ? '2px solid var(--accent-primary)' : '2px solid transparent', 
-                    color: modalTab === 'manual' ? 'var(--text-primary)' : 'var(--text-secondary)' 
-                  }}
-                >
-                  Manual Entry
-                </button>
-                <button 
-                  onClick={() => setModalTab('ai')} 
-                  style={{ 
-                    padding: '8px 16px', background: 'none', border: 'none', cursor: 'pointer',
-                    borderBottom: modalTab === 'ai' ? '2px solid var(--accent-primary)' : '2px solid transparent', 
-                    color: modalTab === 'ai' ? 'var(--text-primary)' : 'var(--text-secondary)', 
-                    display: 'flex', alignItems: 'center', gap: '6px' 
-                  }}
-                >
-                  ✨ AI Task Planner
-                </button>
+                <button onClick={() => setModalTab('manual')} style={{ padding: '8px 16px', background: 'none', border: 'none', cursor: 'pointer', borderBottom: modalTab === 'manual' ? '2px solid var(--accent-primary)' : '2px solid transparent', color: modalTab === 'manual' ? 'var(--text-primary)' : 'var(--text-secondary)' }}>Manual Entry</button>
+                <button onClick={() => setModalTab('ai')} style={{ padding: '8px 16px', background: 'none', border: 'none', cursor: 'pointer', borderBottom: modalTab === 'ai' ? '2px solid var(--accent-primary)' : '2px solid transparent', color: modalTab === 'ai' ? 'var(--text-primary)' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>✨ AI Task Planner</button>
               </div>
             </div>
 
-            {/* Modal Content - Manual */}
             {modalTab === 'manual' && (
               <form onSubmit={handleManualCreateTask} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Task Title</label><input required type="text" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'white' }} placeholder="e.g. Build an OS in 1 hour" /></div>
@@ -594,7 +655,6 @@ function App() {
               </form>
             )}
 
-            {/* Modal Content - AI Planner */}
             {modalTab === 'ai' && (
               <div style={{ padding: '0', display: 'flex', flexDirection: 'column', height: '400px' }}>
                 <div style={{ flex: 1, padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -604,26 +664,15 @@ function App() {
                     </div>
                   ))}
                   {isPlanning && (
-                    <div style={{ alignSelf: 'flex-start', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', padding: '10px 14px', borderRadius: '12px', borderBottomLeftRadius: '4px', fontSize: '0.95rem' }}>
-                      <span style={{ animation: 'pulse 1.5s infinite' }}>Thinking...</span>
-                    </div>
+                    <div style={{ alignSelf: 'flex-start', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', padding: '10px 14px', borderRadius: '12px', borderBottomLeftRadius: '4px', fontSize: '0.95rem' }}><span style={{ animation: 'pulse 1.5s infinite' }}>Thinking...</span></div>
                   )}
                   <div ref={plannerEndRef} />
                 </div>
                 <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border-color)', background: 'var(--bg-secondary)', borderBottomLeftRadius: '16px', borderBottomRightRadius: '16px' }}>
-                  <input 
-                    type="text" 
-                    value={plannerInput}
-                    onChange={e => setPlannerInput(e.target.value)}
-                    onKeyDown={handlePlannerSubmit}
-                    placeholder="Describe your task..." 
-                    style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--accent-primary)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }} 
-                    disabled={isPlanning}
-                  />
+                  <input type="text" value={plannerInput} onChange={e => setPlannerInput(e.target.value)} onKeyDown={handlePlannerSubmit} placeholder="Describe your task..." style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--accent-primary)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }} disabled={isPlanning} />
                 </div>
               </div>
             )}
-            
           </div>
         </div>
       )}

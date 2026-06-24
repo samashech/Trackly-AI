@@ -50,7 +50,15 @@ def create_task(task: Task):
         "priority": task.priority
     }
     MOCK_TASKS.append(new_task)
-    return task
+    return new_task
+
+@app.put("/api/tasks/{task_id}")
+def update_task_status(task_id: str, payload: dict):
+    for t in MOCK_TASKS:
+        if t["id"] == task_id:
+            t["status"] = payload.get("status", t["status"])
+            return t
+    return {"error": "not found"}
 
 @app.post("/api/analyze_risk")
 def analyze_risk(task: Task):
@@ -137,7 +145,7 @@ def planner_chat(req: PlannerChatRequest):
     1. Title (What they want to do)
     2. Estimated Hours (How long it will take, a float number e.g. 2.5)
     3. Priority (must be exactly one of: "critical", "high", "medium", "low")
-    4. Due Date (Convert their relative answer like "tomorrow night" into a strict ISO datetime string based on the current time)
+    4. Due Date: Accept ANY natural language format from the user (e.g. "25 june 8 pm", "tomorrow"). Do NOT ask them to reformat it. You must silently convert their answer into a strict ISO datetime string based on the current time.
 
     CRITICAL RULES:
     - DO NOT use long conversational paragraphs.

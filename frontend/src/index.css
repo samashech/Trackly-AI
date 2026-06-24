@@ -57,6 +57,18 @@
   --border-color: rgba(236, 72, 153, 0.2);
 }
 
+[data-theme="nuclear"] {
+  --bg-primary: #1a0505;
+  --bg-secondary: #2d0a0a;
+  --bg-glass: rgba(45, 10, 10, 0.8);
+  --text-primary: #fee2e2;
+  --text-secondary: #fca5a5;
+  --accent-primary: #ef4444;
+  --accent-secondary: #b91c1c;
+  --accent-hover: #dc2626;
+  --border-color: rgba(239, 68, 68, 0.4);
+}
+
 [data-theme="midnight"] {
   --bg-primary: #020617;
   --bg-secondary: #0f172a;
