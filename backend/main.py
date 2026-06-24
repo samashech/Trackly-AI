@@ -57,6 +57,10 @@ def update_task_status(task_id: str, payload: dict):
     for t in MOCK_TASKS:
         if t["id"] == task_id:
             t["status"] = payload.get("status", t["status"])
+            if "due_date" in payload:
+                t["due_date"] = payload["due_date"]
+            if "estimated_hours" in payload:
+                t["estimated_hours"] = payload["estimated_hours"]
             return t
     return {"error": "not found"}
 
@@ -165,6 +169,46 @@ def planner_chat(req: PlannerChatRequest):
         "estimated_hours": 2.5,
         "priority": "high",
         "due_date": "2026-06-25T15:00:00"
+      }}
+    }}
+    ```
+    Do not add ANY conversational text before or after the JSON block. Output ONLY the JSON block.
+    """
+    
+    ollama_messages = [{'role': 'system', 'content': system_prompt}]
+    for msg in req.messages:
+        ollama_messages.append({'role': msg.role, 'content': msg.content})
+        
+    try:
+        response = ollama.chat(model='fluffy/l3-8b-stheno-v3.2:q4_k_m', messages=ollama_messages)
+        return {"reply": response['message']['content']}
+    except Exception as e:
+        print(f"Ollama Chat Error: {e}")
+        return {"reply": "I'm having trouble connecting to the local brain. Ensure Ollama is running."}
+
+@app.post("/api/interrogation_chat")
+def interrogation_chat(req: PlannerChatRequest):
+    current_time = datetime.now().isoformat()
+    system_prompt = f"""
+    You are an aggressive, strict AI Accountability Coach. The user has FAILED to meet their deadline.
+    The current date and time is: {current_time}.
+    
+    Your goal is to:
+    1. Interrogate them on WHY they failed.
+    2. Force them to commit to a NEW deadline (Date/Time) and NEW estimated hours to finish the task.
+    
+    CRITICAL RULES:
+    - Keep responses short, direct, and slightly scolding but constructive.
+    - Accept any natural language date for the new deadline (e.g. "tomorrow 5pm") and silently convert it to ISO format.
+    - NEVER mention the word "JSON", "code", or "compiling".
+    
+    IMPORTANT TRIGGER: ONCE the user has explained themselves AND provided a new deadline and estimated hours, you MUST output ONLY a JSON block like this, surrounded by triple backticks:
+    ```json
+    {{
+      "action": "RESCHEDULE_TASK",
+      "task": {{
+        "due_date": "2026-06-25T15:00:00",
+        "estimated_hours": 2.5
       }}
     }}
     ```

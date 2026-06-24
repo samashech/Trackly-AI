@@ -180,12 +180,12 @@ function App() {
     }
   };
 
-  const completeTaskAPI = async (taskId: string) => {
+  const updateTaskAPI = async (taskId: string, payload: Partial<Task>) => {
     try {
       await fetch(`http://localhost:8000/api/tasks/${taskId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'completed' })
+        body: JSON.stringify(payload)
       });
       fetchTasksAndAnalyze();
     } catch (err) {
@@ -261,21 +261,43 @@ function App() {
     if (e.key === 'Enter' && lockdownInput.trim()) {
       const userMessage = lockdownInput.trim();
       setLockdownInput('');
-      setLockdownChat(prev => [...prev, { role: 'user', content: userMessage }]);
+      const newMessages: ChatMessage[] = [...lockdownChat, { role: 'user', content: userMessage }];
+      setLockdownChat(newMessages);
       
       try {
-        const response = await fetch('http://localhost:8000/api/chat', {
+        const response = await fetch('http://localhost:8000/api/interrogation_chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: [...lockdownChat, { role: 'user', content: userMessage }],
-            tasks_context: `User missed deadline for task: ${overdueTasks[0]?.title}. Scold them aggressively.`
-          })
+          body: JSON.stringify({ messages: newMessages })
         });
         const data = await response.json();
-        setLockdownChat(prev => [...prev, { role: 'assistant', content: data.reply }]);
+        const replyText = data.reply as string;
+
+        if (replyText.includes('"RESCHEDULE_TASK"')) {
+          const jsonMatch = replyText.match(/\{[\s\S]*"RESCHEDULE_TASK"[\s\S]*\}/);
+          if (jsonMatch && jsonMatch[0]) {
+            try {
+              const parsed = JSON.parse(jsonMatch[0]);
+              if (parsed.action === 'RESCHEDULE_TASK' && parsed.task) {
+                setLockdownChat(prev => [...prev, { role: 'assistant', content: "Extension granted. Rebuilding dashboard schedule..." }]);
+                setTimeout(() => { 
+                  updateTaskAPI(overdueTasks[0].id, {
+                    due_date: parsed.task.due_date,
+                    estimated_hours: parseFloat(parsed.task.estimated_hours)
+                  });
+                  // Reset lockdown chat for next time
+                  setLockdownChat([{ role: 'assistant', content: 'You have failed to meet a deadline. Explain what happened before I unlock the dashboard.' }]);
+                }, 1500);
+                return;
+              }
+            } catch (e) {
+              console.error("Failed to parse AI JSON output", e);
+            }
+          }
+        }
+        setLockdownChat(prev => [...prev, { role: 'assistant', content: replyText }]);
       } catch (err) {
-        setLockdownChat(prev => [...prev, { role: 'assistant', content: "System error." }]);
+        setLockdownChat(prev => [...prev, { role: 'assistant', content: "System error communicating with AI Coach." }]);
       }
     }
   };
@@ -352,10 +374,10 @@ function App() {
             <div ref={lockdownEndRef} />
           </div>
           <div style={{ padding: '24px', borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <input type="text" value={lockdownInput} onChange={e => setLockdownInput(e.target.value)} onKeyDown={handleLockdownSubmit} placeholder="Explain yourself to the AI Coach..." style={{ width: '100%', padding: '16px', borderRadius: '12px', border: '1px solid var(--accent-primary)', background: 'var(--bg-primary)', color: 'white', fontSize: '1rem', outline: 'none' }} />
-            <button className="btn-primary hover-lift" onClick={() => completeTaskAPI(overdueTasks[0].id)} style={{ width: '100%', background: 'var(--priority-critical)', boxShadow: '0 4px 14px 0 rgba(239, 68, 68, 0.4)' }}>
-              Mark "{overdueTasks[0].title}" as Completed to Unlock Dashboard
-            </button>
+            <input type="text" value={lockdownInput} onChange={e => setLockdownInput(e.target.value)} onKeyDown={handleLockdownSubmit} placeholder="Explain yourself and negotiate an extension..." style={{ width: '100%', padding: '16px', borderRadius: '12px', border: '1px solid var(--accent-primary)', background: 'var(--bg-primary)', color: 'white', fontSize: '1rem', outline: 'none' }} />
+            <div style={{ textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+              Or did you actually finish it and forget to check it off? <button onClick={() => updateTaskAPI(overdueTasks[0].id, { status: 'completed' })} style={{ background: 'none', border: 'none', color: 'var(--text-primary)', textDecoration: 'underline', cursor: 'pointer' }}>Force Complete</button>
+            </div>
           </div>
         </div>
       </div>
@@ -398,7 +420,7 @@ function App() {
               <div key={task.id} className="glass-panel hover-lift animate-fade-in" style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
                   <button 
-                    onClick={() => completeTaskAPI(task.id)}
+                    onClick={() => updateTaskAPI(task.id, { status: 'completed' })}
                     style={{ width: '24px', height: '24px', borderRadius: '50%', border: `2px solid var(--priority-${task.priority})`, background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     className="hover-lift"
                     title="Mark as complete"
