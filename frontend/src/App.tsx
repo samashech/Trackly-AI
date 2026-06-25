@@ -15,6 +15,7 @@ interface Task {
   estimated_hours: number;
   due_date: string;
   status: 'pending' | 'completed';
+  blocked_sites?: string[];
 }
 
 interface RiskAnalysis {
@@ -61,6 +62,7 @@ function App() {
   const [newTaskHours, setNewTaskHours] = useState('1');
   const [newTaskDate, setNewTaskDate] = useState('');
   const [newTaskPriority, setNewTaskPriority] = useState<Priority>('medium');
+  const [newTaskBlockedSites, setNewTaskBlockedSites] = useState('');
 
   // AI Planner State
   const [plannerMessages, setPlannerMessages] = useState<ChatMessage[]>([
@@ -174,6 +176,7 @@ function App() {
       setNewTaskHours('1');
       setNewTaskDate('');
       setNewTaskPriority('medium');
+      setNewTaskBlockedSites('');
       fetchTasksAndAnalyze();
     } catch (err) {
       console.error("Failed to create task", err);
@@ -196,13 +199,22 @@ function App() {
   const handleManualCreateTask = async (e: FormEvent) => {
     e.preventDefault();
     const dueDate = newTaskDate ? new Date(newTaskDate).toISOString() : new Date().toISOString();
+    
+    // Clean up blocked sites input (append .com if no dot is present)
+    const blockedSitesArray = newTaskBlockedSites
+      .split(',')
+      .map(s => s.trim())
+      .filter(s => s.length > 0)
+      .map(s => s.includes('.') ? s : `${s}.com`);
+
     const taskData: Task = {
       id: Math.random().toString(36).substring(7),
       title: newTaskTitle,
       estimated_hours: parseFloat(newTaskHours),
       due_date: dueDate,
       priority: newTaskPriority,
-      status: 'pending'
+      status: 'pending',
+      blocked_sites: blockedSitesArray
     };
     await createNewTaskAPI(taskData);
   };
@@ -238,7 +250,8 @@ function App() {
                   estimated_hours: parseFloat(parsed.task.estimated_hours),
                   due_date: parsed.task.due_date,
                   priority: parsed.task.priority,
-                  status: 'pending'
+                  status: 'pending',
+                  blocked_sites: parsed.task.blocked_sites || []
                 };
                 setTimeout(() => { createNewTaskAPI(aiTask); }, 1500);
                 return;
@@ -673,6 +686,7 @@ function App() {
                   <div style={{ flex: 1 }}><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Priority</label><select value={newTaskPriority} onChange={e => setNewTaskPriority(e.target.value as Priority)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'white' }}><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></div>
                 </div>
                 <div><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Due Date & Time</label><input required type="datetime-local" value={newTaskDate} onChange={e => setNewTaskDate(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'white' }} /></div>
+                <div><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Blocked Sites (comma separated)</label><input type="text" value={newTaskBlockedSites} onChange={e => setNewTaskBlockedSites(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'white' }} placeholder="e.g. youtube, netflix.com" /></div>
                 <div style={{ marginTop: '16px', display: 'flex', gap: '12px', justifyContent: 'flex-end' }}><button type="button" onClick={() => setShowModal(false)} style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer' }} className="hover-lift">Cancel</button><button type="submit" className="btn-primary hover-lift">Create Task</button></div>
               </form>
             )}

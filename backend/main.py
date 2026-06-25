@@ -25,6 +25,7 @@ class Task(BaseModel):
     estimated_hours: float
     status: str = "pending"
     priority: str = "medium"
+    blocked_sites: List[str] = []
 
 MOCK_TASKS = []
 
@@ -47,7 +48,8 @@ def create_task(task: Task):
         "due_date": task.due_date,
         "estimated_hours": task.estimated_hours,
         "status": task.status,
-        "priority": task.priority
+        "priority": task.priority,
+        "blocked_sites": task.blocked_sites
     }
     MOCK_TASKS.append(new_task)
     return new_task
@@ -145,11 +147,12 @@ def planner_chat(req: PlannerChatRequest):
     You are an AI Task Planner. Your goal is to help the user create a highly specific task for their execution dashboard.
     The current date and time is: {current_time}.
     
-    You must gather 4 pieces of information from the user:
+    You must gather 5 pieces of information from the user:
     1. Title (What they want to do)
     2. Estimated Hours (How long it will take, a float number e.g. 2.5)
     3. Priority (must be exactly one of: "critical", "high", "medium", "low")
     4. Due Date: Accept ANY natural language format from the user (e.g. "25 june 8 pm", "tomorrow"). Do NOT ask them to reformat it. You must silently convert their answer into a strict ISO datetime string based on the current time.
+    5. Blocked Sites: Ask them if there are any distracting websites (like youtube or instagram) they want blocked if they miss the deadline. Convert their casual names into a JSON array of standard root domains (e.g., ["youtube.com", "instagram.com"]).
 
     CRITICAL RULES:
     - DO NOT use long conversational paragraphs.
@@ -157,10 +160,11 @@ def planner_chat(req: PlannerChatRequest):
       "Got it. I still need:
       - Estimated duration in hours
       - Due date/time
-      - Priority level"
+      - Priority level
+      - Any websites to block if you fail"
     - NEVER mention the word "JSON", "code", or "compiling" to the user.
     
-    IMPORTANT TRIGGER: ONCE you have gathered ALL 4 pieces of information, you MUST output ONLY a JSON block like this, surrounded by triple backticks:
+    IMPORTANT TRIGGER: ONCE you have gathered ALL 5 pieces of information, you MUST output ONLY a JSON block like this, surrounded by triple backticks:
     ```json
     {{
       "action": "CREATE_TASK",
@@ -168,7 +172,8 @@ def planner_chat(req: PlannerChatRequest):
         "title": "Study Biology",
         "estimated_hours": 2.5,
         "priority": "high",
-        "due_date": "2026-06-25T15:00:00"
+        "due_date": "2026-06-25T15:00:00",
+        "blocked_sites": ["youtube.com", "instagram.com"]
       }}
     }}
     ```

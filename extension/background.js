@@ -1,27 +1,26 @@
-// List of domains to block when a task is overdue
-const BLOCKED_DOMAINS = [
-  "youtube.com",
-  "instagram.com",
-  "facebook.com",
-  "reddit.com",
-  "twitter.com",
-  "x.com"
-];
-
-// Function to check if the user has failed any deadlines
-async function isSystemInLockdown() {
+// Function to fetch overdue tasks and dynamically extract blocked domains
+async function getActiveBlockedDomains() {
   try {
     // Talk directly to our local FastAPI backend
     const response = await fetch('http://localhost:8000/api/tasks');
     const tasks = await response.json();
     
     const now = new Date();
+    // Find all overdue tasks
+    const overdueTasks = tasks.filter(t => t.status !== 'completed' && new Date(t.due_date) < now);
     
-    // Returns true if ANY task is pending and past its due date
-    return tasks.some(t => t.status !== 'completed' && new Date(t.due_date) < now);
+    // Collect all the domains that these specific overdue tasks asked to block
+    let blockedDomains = [];
+    for (const task of overdueTasks) {
+      if (task.blocked_sites && Array.isArray(task.blocked_sites)) {
+        blockedDomains.push(...task.blocked_sites);
+      }
+    }
+    
+    return blockedDomains;
   } catch (error) {
-    // If backend is down, default to not locking down
-    return false;
+    // If backend is down, we don't know what to block
+    return [];
   }
 }
 
@@ -33,18 +32,15 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       const url = new URL(tab.url || changeInfo.url);
       const domain = url.hostname.replace('www.', ''); // clean the domain
       
+      // Ask the backend for the currently active list of blocked domains
+      const blockedDomains = await getActiveBlockedDomains();
+      
       // Is the user trying to visit a blocked domain?
-      if (BLOCKED_DOMAINS.includes(domain)) {
+      if (blockedDomains.includes(domain)) {
+        console.log(`ActionMate Enforcer: Blocked access to ${domain}! Redirecting to dashboard.`);
         
-        // Immediately ask the backend if we are in lockdown
-        const lockedDown = await isSystemInLockdown();
-        
-        if (lockedDown) {
-          console.log(`ActionMate Enforcer: Blocked access to ${domain}! Redirecting to dashboard.`);
-          
-          // Forcefully redirect the tab back to the ActionMate Lockdown screen
-          chrome.tabs.update(tabId, { url: "http://localhost:5173" });
-        }
+        // Forcefully redirect the tab back to the ActionMate Lockdown screen
+        chrome.tabs.update(tabId, { url: "http://localhost:5173" });
       }
     } catch (e) {
       // Ignore internal browser URLs like chrome://
