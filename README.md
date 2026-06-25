@@ -20,6 +20,10 @@ The architecture consists of three integrated systems running entirely on your l
 * **The Dashboard (Frontend):** A beautiful glassmorphism **React + Vite** web app where you manage your tasks, view your AI Risk Analysis, and chat with the AI Planner.
 * **The Enforcer (Chrome Extension):** A custom Google Chrome extension that quietly polls the backend. When a task goes overdue, it dynamically extracts the `blocked_sites` array for that specific task and instantly redirects your browser if you try to visit them.
 
+## 🔒 Privacy & Security (100% Local)
+**None of your personal data is stolen, tracked, or sent to the cloud.** 
+Because this application uses **Ollama** to run the Artificial Intelligence directly on your computer's own hardware, you do not need an internet connection to use the AI Planner or the AI Interrogation features. Your tasks, your browsing history, and your conversations with the AI never leave your local system.
+
 ---
 
 ## 🚀 How to Run It on Your System
