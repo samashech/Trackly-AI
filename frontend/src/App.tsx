@@ -52,6 +52,8 @@ function App() {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [showHabitInput, setShowHabitInput] = useState(false);
   const [newHabitTitle, setNewHabitTitle] = useState('');
+  const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
+  const [editingHabitTitle, setEditingHabitTitle] = useState('');
   const [loading, setLoading] = useState(false);
   const [theme, setTheme] = useState<Theme>(() => {
     return (localStorage.getItem('theme') as Theme) || 'dark';
@@ -212,6 +214,29 @@ function App() {
       fetchHabits();
     } catch (err) {
       console.error("Failed to toggle habit", err);
+    }
+  };
+
+  const deleteHabitAPI = async (id: string) => {
+    try {
+      await fetch(`http://localhost:8000/api/habits/${id}`, { method: 'DELETE' });
+      fetchHabits();
+    } catch (err) {
+      console.error("Failed to delete habit", err);
+    }
+  };
+
+  const updateHabitAPI = async (id: string, title: string) => {
+    try {
+      await fetch(`http://localhost:8000/api/habits/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title })
+      });
+      setEditingHabitId(null);
+      fetchHabits();
+    } catch (err) {
+      console.error("Failed to update habit", err);
     }
   };
 
@@ -559,13 +584,25 @@ function App() {
           <div style={{ display: 'grid', gap: '16px', marginBottom: '32px' }}>
             {habits.map(habit => (
               <div key={habit.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-primary)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-                <div>
-                  <h3 style={{ margin: '0 0 8px 0' }}>{habit.title}</h3>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>🔥 {habit.streak} day streak</div>
-                </div>
+                {editingHabitId === habit.id ? (
+                  <div style={{ display: 'flex', gap: '8px', flex: 1, marginRight: '16px' }}>
+                    <input type="text" value={editingHabitTitle} onChange={e => setEditingHabitTitle(e.target.value)} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid var(--accent-primary)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', outline: 'none' }} autoFocus />
+                    <button onClick={() => updateHabitAPI(habit.id, editingHabitTitle)} className="btn-primary hover-lift">Save</button>
+                    <button onClick={() => setEditingHabitId(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer' }}>Cancel</button>
+                  </div>
+                ) : (
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <h3 style={{ margin: '0 0 8px 0' }}>{habit.title}</h3>
+                      <button onClick={() => { setEditingHabitId(habit.id); setEditingHabitTitle(habit.title); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.9rem', color: 'var(--text-secondary)' }} title="Edit Habit">✏️</button>
+                      <button onClick={() => deleteHabitAPI(habit.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.9rem', color: 'var(--text-secondary)' }} title="Delete Habit">❌</button>
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>🔥 {habit.streak} day streak</div>
+                  </div>
+                )}
                 <button 
                   onClick={() => toggleHabitAPI(habit.id)}
-                  style={{ width: '40px', height: '40px', borderRadius: '50%', border: 'none', background: habit.completed_today ? 'var(--accent-primary)' : 'var(--bg-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '1.2rem', transition: 'all 0.2s' }}
+                  style={{ width: '40px', height: '40px', borderRadius: '50%', border: 'none', background: habit.completed_today ? 'var(--accent-primary)' : 'var(--bg-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '1.2rem', transition: 'all 0.2s', flexShrink: 0 }}
                   className="hover-lift"
                 >
                   {habit.completed_today ? '✓' : ''}

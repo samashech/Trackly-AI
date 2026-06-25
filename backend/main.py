@@ -96,6 +96,21 @@ def toggle_habit(habit_id: str):
             return h
     return {"error": "not found"}
 
+@app.put("/api/habits/{habit_id}")
+def update_habit(habit_id: str, payload: dict):
+    for h in MOCK_HABITS:
+        if h["id"] == habit_id:
+            if "title" in payload:
+                h["title"] = payload["title"]
+            return h
+    return {"error": "not found"}
+
+@app.delete("/api/habits/{habit_id}")
+def delete_habit(habit_id: str):
+    global MOCK_HABITS
+    MOCK_HABITS = [h for h in MOCK_HABITS if h["id"] != habit_id]
+    return {"status": "deleted"}
+
 @app.post("/api/analyze_risk")
 def analyze_risk(task: Task):
     # Prepare the prompt for Ollama
