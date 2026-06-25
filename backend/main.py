@@ -27,6 +27,12 @@ class Task(BaseModel):
     priority: str = "medium"
     blocked_sites: List[str] = []
 
+class Habit(BaseModel):
+    id: str
+    title: str
+    streak: int = 0
+    completed_today: bool = False
+
 MOCK_TASKS = []
 
 @app.get("/")
@@ -64,6 +70,30 @@ def update_task_status(task_id: str, payload: dict):
             if "estimated_hours" in payload:
                 t["estimated_hours"] = payload["estimated_hours"]
             return t
+    return {"error": "not found"}
+
+MOCK_HABITS = []
+
+@app.get("/api/habits")
+def get_habits():
+    return MOCK_HABITS
+
+@app.post("/api/habits")
+def create_habit(habit: Habit):
+    new_h = habit.dict()
+    MOCK_HABITS.append(new_h)
+    return new_h
+
+@app.put("/api/habits/{habit_id}/toggle")
+def toggle_habit(habit_id: str):
+    for h in MOCK_HABITS:
+        if h["id"] == habit_id:
+            h["completed_today"] = not h["completed_today"]
+            if h["completed_today"]:
+                h["streak"] += 1
+            else:
+                h["streak"] = max(0, h["streak"] - 1)
+            return h
     return {"error": "not found"}
 
 @app.post("/api/analyze_risk")

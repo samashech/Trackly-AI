@@ -18,6 +18,13 @@ interface Task {
   blocked_sites?: string[];
 }
 
+interface Habit {
+  id: string;
+  title: string;
+  streak: number;
+  completed_today: boolean;
+}
+
 interface RiskAnalysis {
   risk_score: number;
   recommendation: string;
@@ -42,6 +49,9 @@ function App() {
   // App State
   const [activeTab, setActiveTab] = useState('dashboard');
   const [tasks, setTasks] = useState<TaskWithRisk[]>([]);
+  const [habits, setHabits] = useState<Habit[]>([]);
+  const [showHabitInput, setShowHabitInput] = useState(false);
+  const [newHabitTitle, setNewHabitTitle] = useState('');
   const [loading, setLoading] = useState(false);
   const [theme, setTheme] = useState<Theme>(() => {
     return (localStorage.getItem('theme') as Theme) || 'dark';
@@ -86,6 +96,7 @@ function App() {
       setAuthLoading(false);
       if (currentUser) {
         fetchTasksAndAnalyze();
+        fetchHabits();
       }
     });
     return () => unsubscribe();
@@ -158,8 +169,49 @@ function App() {
         }
       });
     } catch (error) {
-      console.error("Failed to fetch tasks:", error);
+      console.error("Failed to fetch tasks", error);
       setLoading(false);
+    }
+  };
+
+  const fetchHabits = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/habits');
+      const data = await response.json();
+      setHabits(data);
+    } catch (err) {
+      console.error("Failed to fetch habits", err);
+    }
+  };
+
+  const createHabitAPI = async (title: string) => {
+    try {
+      await fetch('http://localhost:8000/api/habits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: Math.random().toString(36).substring(7),
+          title: title,
+          streak: 0,
+          completed_today: false
+        })
+      });
+      setShowHabitInput(false);
+      setNewHabitTitle('');
+      fetchHabits();
+    } catch (err) {
+      console.error("Failed to create habit", err);
+    }
+  };
+
+  const toggleHabitAPI = async (id: string) => {
+    try {
+      await fetch(`http://localhost:8000/api/habits/${id}/toggle`, {
+        method: 'PUT'
+      });
+      fetchHabits();
+    } catch (err) {
+      console.error("Failed to toggle habit", err);
     }
   };
 
@@ -500,28 +552,46 @@ function App() {
     }
 
     if (activeTab === 'habits') {
-      const userHabits: any[] = []; 
       return (
         <div className="glass-panel animate-fade-in" style={{ padding: '32px' }}>
-          <h2 style={{ marginBottom: '24px' }}>Habit Tracker (Last 7 Days)</h2>
-          {userHabits.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
-              <div style={{ fontSize: '32px', marginBottom: '16px' }}>🌱</div>
-              <p>You haven't added any habits yet. Start tracking small daily actions to build momentum!</p>
-              <button className="btn-primary hover-lift" style={{ marginTop: '16px' }}>+ Track New Habit</button>
+          <h2 style={{ marginBottom: '24px' }}>Habit Tracker</h2>
+          
+          <div style={{ display: 'grid', gap: '16px', marginBottom: '32px' }}>
+            {habits.map(habit => (
+              <div key={habit.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-primary)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                <div>
+                  <h3 style={{ margin: '0 0 8px 0' }}>{habit.title}</h3>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>🔥 {habit.streak} day streak</div>
+                </div>
+                <button 
+                  onClick={() => toggleHabitAPI(habit.id)}
+                  style={{ width: '40px', height: '40px', borderRadius: '50%', border: 'none', background: habit.completed_today ? 'var(--accent-primary)' : 'var(--bg-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '1.2rem', transition: 'all 0.2s' }}
+                  className="hover-lift"
+                >
+                  {habit.completed_today ? '✓' : ''}
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {!showHabitInput ? (
+            <div style={{ textAlign: 'center' }}>
+              {habits.length === 0 && <p style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>You aren't tracking any habits yet.</p>}
+              <button className="btn-primary hover-lift" onClick={() => setShowHabitInput(true)}>+ Track New Habit</button>
             </div>
           ) : (
-            <div style={{ display: 'grid', gap: '20px' }}>
-              {userHabits.map(habit => (
-                <div key={habit.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-primary)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                  <h4 style={{ margin: 0, width: '150px' }}>{habit.name}</h4>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    {habit.streaks.map((done: boolean, i: number) => (
-                      <div key={i} style={{ width: '20px', height: '20px', borderRadius: '50%', background: done ? 'var(--accent-primary)' : 'var(--bg-secondary)', boxShadow: done ? '0 0 8px var(--accent-primary)' : 'none' }}></div>
-                    ))}
-                  </div>
-                </div>
-              ))}
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <input 
+                type="text" 
+                value={newHabitTitle} 
+                onChange={e => setNewHabitTitle(e.target.value)} 
+                placeholder="e.g. Stop scrolling on Tiktok" 
+                style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }}
+                autoFocus
+                onKeyDown={e => { if (e.key === 'Enter' && newHabitTitle.trim()) createHabitAPI(newHabitTitle); }}
+              />
+              <button className="btn-primary hover-lift" onClick={() => { if(newHabitTitle.trim()) createHabitAPI(newHabitTitle); }}>Save</button>
+              <button onClick={() => setShowHabitInput(false)} style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '0 16px', borderRadius: '8px', cursor: 'pointer' }} className="hover-lift">Cancel</button>
             </div>
           )}
         </div>
@@ -680,13 +750,13 @@ function App() {
 
             {modalTab === 'manual' && (
               <form onSubmit={handleManualCreateTask} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Task Title</label><input required type="text" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'white' }} placeholder="e.g. Build an OS in 1 hour" /></div>
+                <div><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Task Title</label><input required type="text" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }} placeholder="e.g. Build an OS in 1 hour" /></div>
                 <div style={{ display: 'flex', gap: '16px' }}>
-                  <div style={{ flex: 1 }}><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Est. Hours</label><input required type="number" step="0.5" min="0" value={newTaskHours} onChange={e => setNewTaskHours(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'white' }} /></div>
-                  <div style={{ flex: 1 }}><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Priority</label><select value={newTaskPriority} onChange={e => setNewTaskPriority(e.target.value as Priority)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'white' }}><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></div>
+                  <div style={{ flex: 1 }}><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Est. Hours</label><input required type="number" step="0.5" min="0" value={newTaskHours} onChange={e => setNewTaskHours(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }} /></div>
+                  <div style={{ flex: 1 }}><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Priority</label><select value={newTaskPriority} onChange={e => setNewTaskPriority(e.target.value as Priority)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></div>
                 </div>
-                <div><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Due Date & Time</label><input required type="datetime-local" value={newTaskDate} onChange={e => setNewTaskDate(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'white' }} /></div>
-                <div><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Blocked Sites (comma separated)</label><input type="text" value={newTaskBlockedSites} onChange={e => setNewTaskBlockedSites(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'white' }} placeholder="e.g. youtube, netflix.com" /></div>
+                <div><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Due Date & Time</label><input required type="datetime-local" value={newTaskDate} onChange={e => setNewTaskDate(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }} /></div>
+                <div><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Blocked Sites (comma separated)</label><input type="text" value={newTaskBlockedSites} onChange={e => setNewTaskBlockedSites(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }} placeholder="e.g. youtube, netflix.com" /></div>
                 <div style={{ marginTop: '16px', display: 'flex', gap: '12px', justifyContent: 'flex-end' }}><button type="button" onClick={() => setShowModal(false)} style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer' }} className="hover-lift">Cancel</button><button type="submit" className="btn-primary hover-lift">Create Task</button></div>
               </form>
             )}
