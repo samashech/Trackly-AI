@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "ActionMate AI Enforcer",
+  "version": "1.0",
+  "description": "Silently blocks distracting websites when you have an overdue task on your ActionMate dashboard.",
+  "permissions": [
+    "tabs"
+  ],
+  "host_permissions": [
+    "*://*.youtube.com/*",
+    "*://*.instagram.com/*",
+    "*://*.facebook.com/*",
+    "*://*.reddit.com/*",
+    "*://*.twitter.com/*",
+    "*://*.x.com/*",
+    "http://localhost:8000/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}
