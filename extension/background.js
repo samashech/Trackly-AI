@@ -166,3 +166,75 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     }
   }
 });
+
+// --- TIME TRACKING SURVEILLANCE ---
+
+let activeTabDomain = null;
+let activeTabStartTime = null;
+
+function handleTabChange(tab) {
+  const now = Date.now();
+  
+  if (activeTabDomain && activeTabStartTime) {
+    const elapsedSeconds = Math.floor((now - activeTabStartTime) / 1000);
+    if (elapsedSeconds > 0) {
+      fetch('http://localhost:8000/api/usage', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ domain: activeTabDomain, seconds: elapsedSeconds })
+      }).catch(console.error);
+    }
+  }
+
+  if (tab && tab.url && tab.url.startsWith('http')) {
+    try {
+      const url = new URL(tab.url);
+      activeTabDomain = url.hostname.replace('www.', '');
+      activeTabStartTime = now;
+    } catch (e) {
+      activeTabDomain = null;
+      activeTabStartTime = null;
+    }
+  } else {
+    activeTabDomain = null;
+    activeTabStartTime = null;
+  }
+}
+
+chrome.tabs.onActivated.addListener(activeInfo => {
+  chrome.tabs.get(activeInfo.tabId, tab => {
+    handleTabChange(tab);
+  });
+});
+
+chrome.windows.onFocusChanged.addListener(windowId => {
+  if (windowId === chrome.windows.WINDOW_ID_NONE) {
+    handleTabChange(null);
+  } else {
+    chrome.tabs.query({active: true, windowId: windowId}, tabs => {
+      if (tabs.length > 0) handleTabChange(tabs[0]);
+    });
+  }
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (tab.active && changeInfo.url) {
+    handleTabChange(tab);
+  }
+});
+
+// Sync every 10 seconds to catch users sitting on long youtube videos
+setInterval(() => {
+  if (activeTabDomain && activeTabStartTime) {
+    const now = Date.now();
+    const elapsedSeconds = Math.floor((now - activeTabStartTime) / 1000);
+    if (elapsedSeconds >= 10) { 
+      fetch('http://localhost:8000/api/usage', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ domain: activeTabDomain, seconds: elapsedSeconds })
+      }).catch(console.error);
+      activeTabStartTime = now;
+    }
+  }
+}, 10000);

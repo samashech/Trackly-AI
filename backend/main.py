@@ -34,6 +34,7 @@ class Habit(BaseModel):
     title: str
     streak: int = 0
     completed_today: bool = False
+    tracked_domains: List[str] = []
 
 MOCK_TASKS = []
 
@@ -92,6 +93,21 @@ def update_task_status(task_id: str, payload: dict):
     return {"error": "not found"}
 
 MOCK_HABITS = []
+MOCK_USAGE = {} # domain -> seconds today
+
+class UsagePayload(BaseModel):
+    domain: str
+    seconds: int
+
+@app.post("/api/usage")
+def report_usage(payload: UsagePayload):
+    global MOCK_USAGE
+    MOCK_USAGE[payload.domain] = MOCK_USAGE.get(payload.domain, 0) + payload.seconds
+    return {"status": "ok"}
+
+@app.get("/api/usage")
+def get_usage():
+    return MOCK_USAGE
 
 @app.get("/api/habits")
 def get_habits():

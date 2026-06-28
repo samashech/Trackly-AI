@@ -26,6 +26,7 @@ interface Habit {
   title: string;
   streak: number;
   completed_today: boolean;
+  tracked_domains?: string[];
 }
 
 interface RiskAnalysis {
@@ -90,6 +91,8 @@ function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
   const [ignoredSuggestions, setIgnoredSuggestions] = useState<string[]>([]);
+  const [selectedHabit, setSelectedHabit] = useState<Habit | null>(null);
+  const [usageStats, setUsageStats] = useState<Record<string, number>>({});
   const [cursorStyle, setCursorStyle] = useState<CursorStyle>((localStorage.getItem('cursorStyle') as CursorStyle) || 'none');
   const [aiPersonality, setAiPersonality] = useState(localStorage.getItem('aiPersonality') || 'Aggressive Execution Coach');
   const [animationsEnabled, setAnimationsEnabled] = useState(localStorage.getItem('animationsEnabled') !== 'false');
@@ -279,6 +282,14 @@ function App() {
 
   async function createHabitAPI(title: string) {
     try {
+      const match = title.toLowerCase().match(/(?:stop using|quit|no) ([a-z0-9-]+)(?:\.com|\.org|\.net)?/i);
+      let tracked_domains: string[] = [];
+      if (match) {
+        let domain = match[1];
+        if (!domain.includes('.')) domain += '.com';
+        tracked_domains.push(domain);
+      }
+
       await fetch('http://localhost:8000/api/habits', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -286,7 +297,8 @@ function App() {
           id: crypto.randomUUID(),
           title: title,
           streak: 0,
-          completed_today: false
+          completed_today: false,
+          tracked_domains: tracked_domains
         })
       });
       setShowHabitInput(false);
@@ -935,13 +947,22 @@ function App() {
                     <button onClick={() => setEditingHabitId(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer' }}>Cancel</button>
                   </div>
                 ) : (
-                  <div style={{ flex: 1 }}>
+                  <div style={{ flex: 1, cursor: 'pointer' }} onClick={async () => {
+                    setSelectedHabit(habit);
+                    try {
+                      const res = await fetch('http://localhost:8000/api/usage');
+                      setUsageStats(await res.json());
+                    } catch (e) { console.error(e); }
+                  }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <h3 style={{ margin: '0 0 8px 0' }}>{habit.title}</h3>
-                      <button onClick={() => { setEditingHabitId(habit.id); setEditingHabitTitle(habit.title); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.9rem', color: 'var(--text-secondary)' }} title="Edit Habit">✏️</button>
-                      <button onClick={() => deleteHabitAPI(habit.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.9rem', color: 'var(--text-secondary)' }} title="Delete Habit">❌</button>
+                      <button onClick={(e) => { e.stopPropagation(); setEditingHabitId(habit.id); setEditingHabitTitle(habit.title); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.9rem', color: 'var(--text-secondary)' }} title="Edit Habit">✏️</button>
+                      <button onClick={(e) => { e.stopPropagation(); deleteHabitAPI(habit.id); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.9rem', color: 'var(--text-secondary)' }} title="Delete Habit">❌</button>
                     </div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>🔥 {habit.streak} day streak</div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                      🔥 {habit.streak} day streak
+                      {habit.tracked_domains && habit.tracked_domains.length > 0 && <span style={{ marginLeft: '12px', color: 'var(--accent-secondary)' }}>👁️ Monitored</span>}
+                    </div>
                   </div>
                 )}
                 <button 
@@ -1196,6 +1217,42 @@ function App() {
         </div>
       )}
       {selectedTask && <TaskModal task={selectedTask} onClose={() => setSelectedTask(null)} />}
+      {selectedHabit && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setSelectedHabit(null)}>
+          <div style={{ width: '450px', background: 'var(--bg-secondary)', borderRadius: '16px', border: '1px solid var(--border-color)', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '24px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ margin: 0 }}>Habit Accountability</h2>
+              <button onClick={() => setSelectedHabit(null)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
+            </div>
+            <div style={{ padding: '24px' }}>
+              <h3 style={{ marginTop: 0, marginBottom: '8px', color: 'var(--accent-primary)' }}>{selectedHabit.title}</h3>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', marginBottom: '24px' }}>We are monitoring your browser 24/7 to ensure you are actually following this habit.</p>
+              
+              {selectedHabit.tracked_domains && selectedHabit.tracked_domains.length > 0 ? (
+                <div>
+                  <h4 style={{ margin: '0 0 12px 0' }}>Monitored Domains:</h4>
+                  {selectedHabit.tracked_domains.map(d => {
+                    const secs = usageStats[d] || 0;
+                    const mins = Math.floor(secs / 60);
+                    return (
+                      <div key={d} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', background: 'var(--bg-primary)', borderRadius: '8px', marginBottom: '8px', border: '1px solid var(--border-color)' }}>
+                        <span style={{ fontWeight: 'bold' }}>{d}</span>
+                        <span style={{ color: secs > 0 ? '#ef4444' : '#10b981', fontWeight: 'bold' }}>
+                          {secs > 0 ? `${mins}m ${secs % 60}s used today` : '0s used today!'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ padding: '16px', background: 'var(--bg-primary)', borderRadius: '8px', border: '1px solid var(--border-color)', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                  This habit does not have any specific websites linked to it for monitoring.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       <style>{`@keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }`}</style>
     </div>
   );
