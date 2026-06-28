@@ -101,11 +101,18 @@
 }
 
 body {
+  margin: 0;
   font-family: 'Bricolage Grotesque', sans-serif;
   background-color: var(--bg-primary);
   color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+}
+
+body.custom-cursor-active,
+body.custom-cursor-active * {
+  cursor: none !important;
 }
 
 /* Typography */

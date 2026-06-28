@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
 import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged } from './firebase';
 import type { User } from 'firebase/auth';
+import { CustomCursor } from './CustomCursor';
+import type { CursorStyle } from './CustomCursor';
 import './index.css';
 
 // Types
@@ -88,6 +90,7 @@ function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
   const [ignoredSuggestions, setIgnoredSuggestions] = useState<string[]>([]);
+  const [cursorStyle, setCursorStyle] = useState<CursorStyle>((localStorage.getItem('cursorStyle') as CursorStyle) || 'none');
   const [aiPersonality, setAiPersonality] = useState(localStorage.getItem('aiPersonality') || 'Aggressive Execution Coach');
   const [animationsEnabled, setAnimationsEnabled] = useState(localStorage.getItem('animationsEnabled') !== 'false');
   const [warningTime, setWarningTime] = useState(Number(localStorage.getItem('warningTime')) || 15);
@@ -197,6 +200,14 @@ function App() {
       document.body.classList.add('disable-animations');
     }
   }, [animationsEnabled]);
+
+  useEffect(() => {
+    if (cursorStyle !== 'none') {
+      document.body.classList.add('custom-cursor-active');
+    } else {
+      document.body.classList.remove('custom-cursor-active');
+    }
+  }, [cursorStyle]);
 
   const handleLogin = async () => {
     try {
@@ -710,6 +721,14 @@ function App() {
               <input type="checkbox" id="animations" checked={animationsEnabled} onChange={e => { setAnimationsEnabled(e.target.checked); localStorage.setItem('animationsEnabled', String(e.target.checked)); if (!e.target.checked) document.body.classList.add('disable-animations'); else document.body.classList.remove('disable-animations'); }} style={{ width: '18px', height: '18px' }} />
               <label htmlFor="animations" style={{ fontWeight: 600 }}>Enable UI Animations</label>
             </div>
+            <div style={{ marginTop: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Custom Cursor</label>
+              <select value={cursorStyle} onChange={e => { setCursorStyle(e.target.value as CursorStyle); localStorage.setItem('cursorStyle', e.target.value); }} style={{ width: '100%', maxWidth: '300px', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+                <option value="none">Default (None)</option>
+                <option value="trailing">Trailing Circle</option>
+                <option value="invert">Inverting Hover</option>
+              </select>
+            </div>
           </div>
 
           <div style={{ marginBottom: '32px' }}>
@@ -1057,6 +1076,7 @@ function App() {
 
   return (
     <div className="app-container">
+      <CustomCursor type={cursorStyle} />
       <aside className={`sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}>
         <div style={{ marginBottom: '40px', display: 'flex', alignItems: 'center', gap: '12px', justifyContent: isSidebarCollapsed ? 'center' : 'flex-start' }}>
           <button onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} className="hover-lift" style={{ background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '1.4rem', padding: '4px', display: 'flex' }} title="Toggle Sidebar">☰</button>
