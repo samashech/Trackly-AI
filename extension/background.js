@@ -16,8 +16,39 @@ function injectCriticalWidget(taskTitles) {
   widget.style.zIndex = '9999999';
   widget.style.boxShadow = '4px 4px 0px #ff5555';
   widget.style.fontFamily = 'system-ui, sans-serif';
+  widget.style.cursor = 'move';
+  widget.style.userSelect = 'none'; // Prevent text selection while dragging
   widget.innerHTML = `⚠️ CRITICAL: ${taskTitles}`;
   document.body.appendChild(widget);
+
+  // Dragging logic
+  let isDragging = false;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  widget.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    // Calculate the offset from the cursor to the top-left of the widget
+    const rect = widget.getBoundingClientRect();
+    offsetX = e.clientX - rect.left;
+    offsetY = e.clientY - rect.top;
+    widget.style.cursor = 'grabbing';
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    // Update position
+    widget.style.left = (e.clientX - offsetX) + 'px';
+    widget.style.top = (e.clientY - offsetY) + 'px';
+    widget.style.bottom = 'auto'; // override the initial bottom anchor
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (isDragging) {
+      isDragging = false;
+      widget.style.cursor = 'move';
+    }
+  });
 }
 
 // Function to inject the banner directly into the webpage
