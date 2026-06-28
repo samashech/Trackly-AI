@@ -713,7 +713,7 @@ function App() {
           </div>
 
           <div style={{ marginBottom: '32px' }}>
-            <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '16px' }}>AI Tutor & Accountability</h3>
+            <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '16px' }}>AI Tutor</h3>
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>AI Personality</label>
               <select value={aiPersonality} onChange={e => { setAiPersonality(e.target.value); localStorage.setItem('aiPersonality', e.target.value); }} style={{ width: '100%', maxWidth: '300px', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
