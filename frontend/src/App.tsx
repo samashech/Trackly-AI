@@ -6,7 +6,7 @@ import './index.css';
 
 // Types
 type Priority = 'critical' | 'high' | 'medium' | 'low';
-type Theme = 'dark' | 'light' | 'ocean' | 'cyberpunk' | 'midnight' | 'forest' | 'nuclear';
+type Theme = 'dark' | 'light' | 'ocean' | 'cyberpunk' | 'midnight' | 'custom' | 'nuclear';
 
 interface Task {
   id: string;
@@ -62,6 +62,17 @@ function App() {
   const [theme, setTheme] = useState<Theme>(() => {
     return (localStorage.getItem('theme') as Theme) || 'dark';
   });
+  const [customColors, setCustomColors] = useState<Record<string, string>>(() => {
+    const saved = localStorage.getItem('customColors');
+    return saved ? JSON.parse(saved) : {
+      '--bg-primary': '#1e1e2f',
+      '--bg-secondary': '#2a2a40',
+      '--text-primary': '#f8f8f2',
+      '--text-secondary': '#b9b9c9',
+      '--accent-primary': '#ff79c6',
+      '--accent-secondary': '#bd93f9',
+    };
+  });
   
   // Chat State
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -116,11 +127,19 @@ function App() {
   useEffect(() => {
     if (isLockdown) {
       document.documentElement.setAttribute('data-theme', 'nuclear');
+      document.documentElement.removeAttribute('style');
     } else {
       document.documentElement.setAttribute('data-theme', theme);
       localStorage.setItem('theme', theme);
+      if (theme === 'custom') {
+        Object.keys(customColors).forEach(key => {
+          document.documentElement.style.setProperty(key, customColors[key]);
+        });
+      } else {
+        document.documentElement.removeAttribute('style');
+      }
     }
-  }, [theme, isLockdown]);
+  }, [theme, isLockdown, customColors]);
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages]);
   useEffect(() => { plannerEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [plannerMessages]);
@@ -900,10 +919,25 @@ function App() {
           </div>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>Theme Options</p>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {['dark', 'light', 'ocean', 'cyberpunk', 'midnight', 'forest'].map(t => (
+            {['dark', 'light', 'ocean', 'cyberpunk', 'midnight', 'custom'].map(t => (
               <button key={t} onClick={() => setTheme(t as Theme)} style={{ flex: '1 1 calc(33.333% - 8px)', padding: '8px 0', borderRadius: '6px', border: theme === t ? '1px solid var(--accent-primary)' : '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '0.8rem', textTransform: 'capitalize' }}>{t}</button>
             ))}
           </div>
+          {theme === 'custom' && (
+            <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px', background: 'var(--bg-primary)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0, fontWeight: 600 }}>Custom Colors</p>
+              {Object.keys(customColors).map(key => (
+                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label style={{ fontSize: '0.75rem', fontFamily: 'monospace' }}>{key.replace('--', '')}</label>
+                  <input type="color" value={customColors[key]} onChange={e => {
+                    const newColors = { ...customColors, [key]: e.target.value };
+                    setCustomColors(newColors);
+                    localStorage.setItem('customColors', JSON.stringify(newColors));
+                  }} style={{ cursor: 'pointer', background: 'none', border: '1px solid var(--border-color)', width: '28px', height: '28px', padding: 0, borderRadius: '4px' }} />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </aside>
 
