@@ -85,8 +85,14 @@ function App() {
 
   // App State
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
   const [ignoredSuggestions, setIgnoredSuggestions] = useState<string[]>([]);
+  const [aiPersonality, setAiPersonality] = useState(localStorage.getItem('aiPersonality') || 'Aggressive Execution Coach');
+  const [animationsEnabled, setAnimationsEnabled] = useState(localStorage.getItem('animationsEnabled') !== 'false');
+  const [warningTime, setWarningTime] = useState(Number(localStorage.getItem('warningTime')) || 15);
+  const [globalBlocklist, setGlobalBlocklist] = useState(localStorage.getItem('globalBlocklist') || '');
+  const [historyCleanDays, setHistoryCleanDays] = useState(Number(localStorage.getItem('historyCleanDays')) || 7);
   const [tasks, setTasks] = useState<TaskWithRisk[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [showHabitInput, setShowHabitInput] = useState(false);
@@ -183,6 +189,14 @@ function App() {
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages]);
   useEffect(() => { plannerEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [plannerMessages]);
   useEffect(() => { lockdownEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [lockdownChat]);
+
+  useEffect(() => {
+    if (animationsEnabled) {
+      document.body.classList.remove('disable-animations');
+    } else {
+      document.body.classList.add('disable-animations');
+    }
+  }, [animationsEnabled]);
 
   const handleLogin = async () => {
     try {
@@ -307,6 +321,10 @@ function App() {
   };
 
   const createNewTaskAPI = async (taskPayload: Task) => {
+    if (globalBlocklist.trim()) {
+      const globalSites = globalBlocklist.split(',').map(s => s.trim()).filter(s => s.length > 0).map(s => s.includes('.') ? s : `${s}.com`);
+      taskPayload.blocked_sites = Array.from(new Set([...(taskPayload.blocked_sites || []), ...globalSites]));
+    }
     try {
       await fetch('http://localhost:8000/api/tasks', {
         method: 'POST',
@@ -476,7 +494,7 @@ function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: [...chatMessages, { role: 'user', content: userMessage }],
-            tasks_context: tasksContext || "User has no tasks currently."
+            tasks_context: `AI Personality Setting: ${aiPersonality} | ` + (tasksContext || "User has no tasks currently.")
           })
         });
         
@@ -658,6 +676,93 @@ function App() {
 
   const renderContent = () => {
     if (loading && tasks.length === 0) return <p style={{ color: 'var(--text-secondary)' }}>Loading tasks from backend...</p>;
+
+    if (activeTab === 'settings') {
+      return (
+        <div className="glass-panel animate-fade-in" style={{ padding: '32px' }}>
+          <h2 style={{ marginBottom: '24px' }}>Settings</h2>
+          
+          <div style={{ marginBottom: '32px' }}>
+            <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '16px' }}>Appearance</h3>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Theme</label>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {['dark', 'light', 'ocean', 'cyberpunk', 'midnight', 'custom'].map(t => (
+                  <button key={t} onClick={() => setTheme(t as Theme)} style={{ padding: '8px 16px', borderRadius: '6px', border: theme === t ? '1px solid var(--accent-primary)' : '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', cursor: 'pointer', textTransform: 'capitalize' }} className="hover-lift">{t}</button>
+                ))}
+              </div>
+            </div>
+            {theme === 'custom' && (
+               <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', background: 'var(--bg-primary)', padding: '16px', borderRadius: '8px' }}>
+                 {Object.keys(customColors).map(key => (
+                   <div key={key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                     <label style={{ fontSize: '0.8rem', fontFamily: 'monospace', marginBottom: '4px' }}>{key.replace('--', '')}</label>
+                     <input type="color" value={customColors[key]} onChange={e => {
+                       const newColors = { ...customColors, [key]: e.target.value };
+                       setCustomColors(newColors);
+                       localStorage.setItem('customColors', JSON.stringify(newColors));
+                     }} style={{ cursor: 'pointer', background: 'none', border: '1px solid var(--border-color)', width: '40px', height: '40px', padding: 0, borderRadius: '4px' }} />
+                   </div>
+                 ))}
+               </div>
+            )}
+            <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <input type="checkbox" id="animations" checked={animationsEnabled} onChange={e => { setAnimationsEnabled(e.target.checked); localStorage.setItem('animationsEnabled', String(e.target.checked)); if (!e.target.checked) document.body.classList.add('disable-animations'); else document.body.classList.remove('disable-animations'); }} style={{ width: '18px', height: '18px' }} />
+              <label htmlFor="animations" style={{ fontWeight: 600 }}>Enable UI Animations</label>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '32px' }}>
+            <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '16px' }}>AI Tutor & Accountability</h3>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>AI Personality</label>
+              <select value={aiPersonality} onChange={e => { setAiPersonality(e.target.value); localStorage.setItem('aiPersonality', e.target.value); }} style={{ width: '100%', maxWidth: '300px', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+                <option value="Aggressive Execution Coach">Aggressive Execution Coach (Drill Sergeant)</option>
+                <option value="Gentle Supportive Coach">Gentle Supportive Coach</option>
+                <option value="Analytical Strategist">Analytical Strategist</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Nuclear Lockdown Warning (minutes before deadline)</label>
+              <input type="number" value={warningTime} onChange={e => { setWarningTime(Number(e.target.value)); localStorage.setItem('warningTime', e.target.value); }} style={{ width: '100%', maxWidth: '150px', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }} />
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '32px' }}>
+            <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '16px' }}>Workflow & Data</h3>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Global Distraction Blocklist (comma separated)</label>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>These sites will be auto-blocked for every new task you create.</p>
+              <input type="text" value={globalBlocklist} onChange={e => { setGlobalBlocklist(e.target.value); localStorage.setItem('globalBlocklist', e.target.value); }} placeholder="e.g. reddit.com, twitter.com" style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }} />
+            </div>
+            <div>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>History Auto-Clean (Days)</label>
+              <select value={historyCleanDays} onChange={e => { setHistoryCleanDays(Number(e.target.value)); localStorage.setItem('historyCleanDays', e.target.value); }} style={{ width: '100%', maxWidth: '150px', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+                <option value="1">1 Day</option>
+                <option value="7">7 Days</option>
+                <option value="30">30 Days</option>
+                <option value="999">Never</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <h3 style={{ borderBottom: '1px solid var(--priority-critical)', paddingBottom: '8px', marginBottom: '16px', color: 'var(--priority-critical)' }}>Danger Zone</h3>
+            <button className="hover-lift" onClick={async () => {
+              if (window.confirm('Are you absolutely sure? This will delete ALL tasks and habits forever.')) {
+                for (const t of tasks) await fetch(`http://localhost:8000/api/tasks/${t.id}`, { method: 'DELETE' });
+                for (const h of habits) await fetch(`http://localhost:8000/api/habits/${h.id}`, { method: 'DELETE' });
+                setTasks([]);
+                setHabits([]);
+                alert('All data wiped.');
+              }
+            }} style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--priority-critical)', border: '1px solid var(--priority-critical)', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
+              ⚠️ Nuke All Data
+            </button>
+          </div>
+        </div>
+      );
+    }
 
     if (activeTab === 'dashboard') {
       return (
@@ -942,12 +1047,25 @@ function App() {
     }
   };
 
+  const TAB_ICONS: Record<string, string> = {
+    'Dashboard': '📊',
+    'Calendar': '📅',
+    'Habits': '🔄',
+    'History': '📜',
+    'AI Tutor': '🤖'
+  };
+
   return (
     <div className="app-container">
-      <aside className="sidebar">
-        <div style={{ marginBottom: '40px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))' }}></div>
-          <h2 style={{ fontSize: '1.2rem', margin: 0 }}>ActionMate AI</h2>
+      <aside className={`sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}>
+        <div style={{ marginBottom: '40px', display: 'flex', alignItems: 'center', gap: '12px', justifyContent: isSidebarCollapsed ? 'center' : 'flex-start' }}>
+          <button onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} className="hover-lift" style={{ background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '1.4rem', padding: '4px', display: 'flex' }} title="Toggle Sidebar">☰</button>
+          {!isSidebarCollapsed && (
+            <>
+              <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))' }}></div>
+              <h2 style={{ fontSize: '1.2rem', margin: 0, whiteSpace: 'nowrap' }}>ActionMate</h2>
+            </>
+          )}
         </div>
         
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
@@ -956,47 +1074,39 @@ function App() {
               key={tab}
               onClick={() => setActiveTab(tab.toLowerCase())}
               className={`sidebar-tab ${activeTab === tab.toLowerCase() ? 'active' : ''}`}
+              title={tab}
             >
-              {tab}
+              <span className="sidebar-icon" style={{ fontSize: '1.2rem', display: 'inline-block', width: '24px', textAlign: 'center' }}>{TAB_ICONS[tab]}</span>
+              {!isSidebarCollapsed && <span className="sidebar-text" style={{ marginLeft: '12px' }}>{tab}</span>}
             </button>
           ))}
         </nav>
 
-        <div style={{ marginTop: 'auto', paddingTop: '24px', borderTop: '1px solid var(--border-color)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+        <div style={{ marginTop: 'auto', paddingTop: '24px', borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px', justifyContent: isSidebarCollapsed ? 'center' : 'flex-start' }}>
              {user?.photoURL ? (
-                <img src={user.photoURL} alt="Profile" style={{ width: '36px', height: '36px', borderRadius: '50%' }} />
+                <img src={user.photoURL} alt="Profile" style={{ width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0 }} title={user?.displayName || 'User'} />
              ) : (
-                <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--accent-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--accent-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', flexShrink: 0 }} title={user?.displayName || 'User'}>
                   {user?.displayName ? user.displayName.charAt(0) : 'U'}
                 </div>
              )}
-             <div style={{ flex: 1, overflow: 'hidden' }}>
-               <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: 600, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{user?.displayName || 'User'}</p>
-               <button onClick={handleLogout} style={{ background: 'none', border: 'none', padding: 0, margin: 0, color: 'var(--text-secondary)', fontSize: '0.8rem', cursor: 'pointer', textDecoration: 'underline' }}>Log out</button>
-             </div>
+             {!isSidebarCollapsed && (
+               <div style={{ flex: 1, overflow: 'hidden' }}>
+                 <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: 600, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{user?.displayName || 'User'}</p>
+                 <button onClick={handleLogout} style={{ background: 'none', border: 'none', padding: 0, margin: 0, color: 'var(--text-secondary)', fontSize: '0.8rem', cursor: 'pointer', textDecoration: 'underline' }}>Log out</button>
+               </div>
+             )}
           </div>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>Theme Options</p>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {['dark', 'light', 'ocean', 'cyberpunk', 'midnight', 'custom'].map(t => (
-              <button key={t} onClick={() => setTheme(t as Theme)} style={{ flex: '1 1 calc(33.333% - 8px)', padding: '8px 0', borderRadius: '6px', border: theme === t ? '1px solid var(--accent-primary)' : '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '0.8rem', textTransform: 'capitalize' }}>{t}</button>
-            ))}
-          </div>
-          {theme === 'custom' && (
-            <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px', background: 'var(--bg-primary)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0, fontWeight: 600 }}>Custom Colors</p>
-              {Object.keys(customColors).map(key => (
-                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <label style={{ fontSize: '0.75rem', fontFamily: 'monospace' }}>{key.replace('--', '')}</label>
-                  <input type="color" value={customColors[key]} onChange={e => {
-                    const newColors = { ...customColors, [key]: e.target.value };
-                    setCustomColors(newColors);
-                    localStorage.setItem('customColors', JSON.stringify(newColors));
-                  }} style={{ cursor: 'pointer', background: 'none', border: '1px solid var(--border-color)', width: '28px', height: '28px', padding: 0, borderRadius: '4px' }} />
-                </div>
-              ))}
-            </div>
-          )}
+          <button 
+            onClick={() => setActiveTab('settings')}
+            className={`sidebar-tab ${activeTab === 'settings' ? 'active' : ''} hover-lift`}
+            title="Settings"
+            style={{ display: 'flex', alignItems: 'center', width: '100%', marginTop: '16px', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', padding: '12px', justifyContent: isSidebarCollapsed ? 'center' : 'flex-start' }}
+          >
+            <span className="sidebar-icon" style={{ fontSize: '1.2rem', display: 'inline-block', width: '24px', textAlign: 'center' }}>⚙️</span>
+            {!isSidebarCollapsed && <span className="sidebar-text" style={{ marginLeft: '12px' }}>Settings</span>}
+          </button>
         </div>
       </aside>
 
