@@ -56,6 +56,9 @@ function App() {
   const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
   const [editingHabitTitle, setEditingHabitTitle] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isOnboarding, setIsOnboarding] = useState(false);
+  const [onboardingInput, setOnboardingInput] = useState('');
+  const [isGeneratingOnboarding, setIsGeneratingOnboarding] = useState(false);
   const [theme, setTheme] = useState<Theme>(() => {
     return (localStorage.getItem('theme') as Theme) || 'dark';
   });
@@ -152,6 +155,10 @@ function App() {
       }));
       setTasks(initialTasks);
       setLoading(false);
+
+      if (initialTasks.length === 0 && !localStorage.getItem('hasCompletedOnboarding')) {
+        setIsOnboarding(true);
+      }
 
       initialTasks.forEach(async (task) => {
         if (task.status === 'completed') {
@@ -446,6 +453,84 @@ function App() {
     );
   }
 
+  if (isOnboarding) {
+    return (
+      <div style={{ height: '100vh', width: '100vw', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)', color: 'var(--text-primary)', flexDirection: 'column' }}>
+        <div className="glass-panel animate-fade-in" style={{ width: '600px', padding: '48px', textAlign: 'center', background: 'var(--bg-secondary)', border: '1px solid var(--accent-primary)' }}>
+          <div style={{ margin: '0 auto 24px', width: '64px', height: '64px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px' }}>🎯</div>
+          <h1 style={{ fontSize: '2rem', marginBottom: '16px' }}>Welcome to ActionMate AI.</h1>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem', marginBottom: '32px', lineHeight: 1.6 }}>
+            I am your personal AI execution coach. Before we begin, what is your primary mission right now? <br/><br/>
+            <em>(e.g., "I am a student studying for finals", or "I am building a tech startup")</em>
+          </p>
+          
+          <input 
+            type="text" 
+            value={onboardingInput} 
+            onChange={e => setOnboardingInput(e.target.value)} 
+            onKeyDown={async e => {
+              if (e.key === 'Enter' && onboardingInput.trim() && !isGeneratingOnboarding) {
+                setIsGeneratingOnboarding(true);
+                try {
+                  const res = await fetch('http://localhost:8000/api/onboarding_generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_mission: onboardingInput.trim() })
+                  });
+                  const data = await res.json();
+                  const rawJson = data.tasks_json.replace(/```json/g, '').replace(/```/g, '').trim();
+                  const generatedTasks = JSON.parse(rawJson);
+                  
+                  for (const t of generatedTasks) {
+                    await fetch('http://localhost:8000/api/tasks', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        id: Math.random().toString(36).substring(7),
+                        title: t.title,
+                        estimated_hours: parseFloat(t.estimated_hours) || 1,
+                        due_date: t.due_date,
+                        priority: t.priority || 'medium',
+                        status: 'pending',
+                        blocked_sites: t.blocked_sites || []
+                      })
+                    });
+                  }
+                  
+                  localStorage.setItem('hasCompletedOnboarding', 'true');
+                  setIsOnboarding(false);
+                  fetchTasksAndAnalyze();
+                } catch (err) {
+                  console.error(err);
+                  setIsGeneratingOnboarding(false);
+                }
+              }
+            }}
+            disabled={isGeneratingOnboarding}
+            placeholder="Type your mission and press Enter..." 
+            style={{ width: '100%', padding: '16px', borderRadius: '12px', border: '1px solid var(--accent-primary)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '1.1rem', outline: 'none', textAlign: 'center' }} 
+            autoFocus
+          />
+          
+          {isGeneratingOnboarding && (
+            <div style={{ marginTop: '24px', color: 'var(--accent-primary)', animation: 'pulse 1.5s infinite' }}>
+              Analyzing your mission and generating your Starter Pack...
+            </div>
+          )}
+          
+          <div style={{ marginTop: '24px' }}>
+            <button onClick={() => {
+              localStorage.setItem('hasCompletedOnboarding', 'true');
+              setIsOnboarding(false);
+            }} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', textDecoration: 'underline', cursor: 'pointer' }}>
+              Skip Tour
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ----------------------------------------------------
   // NUCLEAR LOCKDOWN SCREEN
   // ----------------------------------------------------
@@ -513,7 +598,7 @@ function App() {
   const renderContent = () => {
     if (loading) return <p style={{ color: 'var(--text-secondary)' }}>Loading tasks from backend...</p>;
 
-    if (activeTab === 'dashboard' || activeTab === 'tasks') {
+    if (activeTab === 'dashboard') {
       return (
         <>
           {suggestedTasks.length > 0 && activeTab === 'dashboard' && (
@@ -537,23 +622,7 @@ function App() {
             </div>
           )}
 
-          {criticalTask && criticalTask.riskAnalysis && (
-            <div className="glass-panel animate-fade-in" style={{ padding: '24px', marginBottom: '32px', borderLeft: '4px solid var(--priority-critical)', background: 'rgba(239, 68, 68, 0.05)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <h3 style={{ color: 'var(--priority-critical)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span className="priority-dot critical"></span> Intervention Needed
-                  </h3>
-                  <p style={{ color: 'var(--text-secondary)' }}>
-                    You have an <strong style={{color: 'var(--text-primary)'}}>{criticalTask.riskAnalysis.risk_score}% chance</strong> of missing your <strong>{criticalTask.title}</strong> deadline. 
-                  </p>
-                  <p style={{ marginTop: '8px', fontSize: '0.9rem', color: 'var(--priority-high)' }}>
-                    <strong>AI Recommendation:</strong> {criticalTask.riskAnalysis.recommendation}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
+
 
           <h3 style={{ marginBottom: '16px' }}>Dynamic Priority List</h3>
           <div style={{ display: 'grid', gap: '16px' }}>
@@ -572,10 +641,17 @@ function App() {
                     className="hover-lift"
                     title="Mark as complete"
                   ></button>
-                  <div>
+                  <div style={{ flex: 1 }}>
                     <h4 style={{ fontSize: '1.1rem', marginBottom: '4px' }}>{task.title}</h4>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                      Due: {formatDate(task.due_date)} • Est. Effort: {task.estimated_hours}h
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span>Due: {formatDate(task.due_date)}</span>
+                      <span>• Est: {task.estimated_hours}h</span>
+                      <button onClick={() => {
+                        setActiveTab('ai tutor');
+                        setChatInput(`I need guidance on my task: "${task.title}". Can you break it down or help me start?`);
+                      }} className="hover-lift" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--accent-primary)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        🤖 Ask AI Tutor
+                      </button>
                     </p>
                   </div>
                 </div>
@@ -723,17 +799,30 @@ function App() {
       );
     }
 
-    if (activeTab === 'ai coach') {
+    if (activeTab === 'ai tutor') {
       return (
         <div className="glass-panel animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 160px)' }}>
           <div style={{ padding: '24px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: 'var(--priority-low)', boxShadow: '0 0 8px var(--priority-low)' }}></div>
-            <h2 style={{ margin: 0 }}>Execution Coach</h2>
+            <h2 style={{ margin: 0 }}>Execution Tutor</h2>
           </div>
           <div style={{ flex: 1, padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ alignSelf: 'flex-start', background: 'var(--bg-secondary)', padding: '16px', borderRadius: '16px', borderBottomLeftRadius: '4px', maxWidth: '80%' }}>
+            {criticalTask && criticalTask.riskAnalysis && (
+              <div style={{ padding: '16px', marginBottom: '16px', borderLeft: '4px solid var(--priority-critical)', background: 'rgba(239, 68, 68, 0.05)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                <h3 style={{ color: 'var(--priority-critical)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.1rem' }}>
+                  <span className="priority-dot critical"></span> High Risk Intervention Needed
+                </h3>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
+                  You have an <strong style={{color: 'var(--text-primary)'}}>{criticalTask.riskAnalysis.risk_score}% chance</strong> of missing your <strong>{criticalTask.title}</strong> deadline. 
+                </p>
+                <p style={{ marginTop: '8px', fontSize: '0.9rem', color: 'var(--priority-high)' }}>
+                  <strong>Coach Recommendation:</strong> {criticalTask.riskAnalysis.recommendation}
+                </p>
+              </div>
+            )}
+            <div style={{ alignSelf: 'flex-start', background: 'var(--bg-secondary)', padding: '16px', borderRadius: '16px', borderBottomLeftRadius: '4px', maxWidth: '80%', border: '1px solid var(--border-color)' }}>
               {pendingTasks.length > 0 
-                ? "Welcome to your dedicated coaching session. I have full context of your calendar and tasks. What's blocking you today?"
+                ? "Welcome to your dedicated tutoring session. I have full context of your tasks. Which task do you need guidance on?"
                 : "Welcome! Your schedule is completely clear right now. Add some tasks, and I will help you formulate an execution strategy."}
             </div>
             {chatMessages.map((msg, i) => (
@@ -779,7 +868,7 @@ function App() {
         </div>
         
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-          {['Dashboard', 'Tasks', 'Calendar', 'Habits', 'History', 'AI Coach'].map(tab => (
+          {['Dashboard', 'Calendar', 'Habits', 'History', 'AI Tutor'].map(tab => (
             <button 
               key={tab}
               onClick={() => setActiveTab(tab.toLowerCase())}
@@ -829,34 +918,6 @@ function App() {
         {renderContent()}
       </main>
 
-      {/* Floating Chat Widget */}
-      {activeTab !== 'ai coach' && pendingTasks.length > 0 && (
-        <div className="glass-panel" style={{ position: 'fixed', bottom: '32px', right: '32px', width: '350px', height: '450px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.4)', zIndex: 100 }}>
-          <div style={{ padding: '16px', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-glass)' }}>
-            <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ width: '8px', height: '8px', background: '#10b981', borderRadius: '50%', boxShadow: '0 0 8px #10b981' }}></span>
-              AI Accountability Coach
-            </h4>
-          </div>
-          <div style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ background: 'var(--bg-secondary)', padding: '12px', borderRadius: '12px', borderBottomLeftRadius: '2px', fontSize: '0.9rem' }}>
-              Hey {user?.displayName ? user.displayName.split(' ')[0] : 'there'}. I'm analyzing your dashboard. Let me know if you need an emergency action plan.
-            </div>
-            {chatMessages.map((msg, i) => (
-              <div key={i} style={{ alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start', background: msg.role === 'user' ? 'var(--accent-primary)' : 'var(--bg-secondary)', padding: '10px 12px', borderRadius: '12px', borderBottomRightRadius: msg.role === 'user' ? '4px' : '12px', borderBottomLeftRadius: msg.role === 'assistant' ? '4px' : '12px', fontSize: '0.9rem' }}>
-                {msg.content}
-              </div>
-            ))}
-            {isChatting && (
-              <div style={{ alignSelf: 'flex-start', background: 'var(--bg-secondary)', padding: '10px 12px', borderRadius: '12px', borderBottomLeftRadius: '4px', fontSize: '0.9rem' }}><span style={{ animation: 'pulse 1.5s infinite' }}>Thinking...</span></div>
-            )}
-            <div ref={chatEndRef} />
-          </div>
-          <div style={{ padding: '16px', borderTop: '1px solid var(--border-color)', background: 'var(--bg-glass)' }}>
-            <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={handleChatSubmit} placeholder="Press Enter to send..." style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }} />
-          </div>
-        </div>
-      )}
 
       {/* New Task Modal */}
       {showModal && (

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;500;600;700;800&display=swap');
 
 :root {
   /* Semantic Priority Colors (Shared across themes) */
@@ -100,7 +100,7 @@
 }
 
 body {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Bricolage Grotesque', sans-serif;
   background-color: var(--bg-primary);
   color: var(--text-primary);
   line-height: 1.5;
@@ -113,14 +113,13 @@ h1, h2, h3, h4, h5, h6 {
   letter-spacing: -0.02em;
 }
 
-/* Glassmorphism utility classes */
+/* Glassmorphism utility classes -> Converted to Roadmap.sh brutalist style */
 .glass-panel {
-  background: var(--bg-glass);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border-color);
-  border-radius: 16px;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  background: var(--bg-secondary);
+  border: 1px solid var(--text-primary);
+  border-radius: 12px;
+  box-shadow: 4px 4px 0px var(--text-primary);
+  margin-bottom: 8px;
 }
 
 /* Layout */
@@ -151,20 +150,20 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Buttons */
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  background: var(--accent-primary);
   color: white;
-  border: none;
+  border: 1px solid var(--text-primary);
   padding: 10px 20px;
   border-radius: 8px;
-  font-weight: 500;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s ease-in-out;
-  box-shadow: 0 4px 14px 0 rgba(99, 102, 241, 0.39);
+  transition: all 0.15s ease-in-out;
+  box-shadow: 3px 3px 0px var(--text-primary);
 }
 
 .btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0px var(--text-primary);
 }
 
 /* Animations */
@@ -179,11 +178,11 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Micro-animations on hover */
 .hover-lift {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: all 0.15s ease;
 }
 .hover-lift:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  transform: translate(-3px, -3px);
+  box-shadow: 4px 4px 0px var(--text-primary) !important;
 }
 
 /* Task Priority Indicators */

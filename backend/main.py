@@ -130,6 +130,39 @@ def delete_habit(habit_id: str):
     MOCK_HABITS = [h for h in MOCK_HABITS if h["id"] != habit_id]
     return {"status": "deleted"}
 
+class OnboardingRequest(BaseModel):
+    user_mission: str
+
+@app.post("/api/onboarding_generate")
+def onboarding_generate(req: OnboardingRequest):
+    now_iso = datetime.now().isoformat()
+    prompt = f"""
+    Current Date and Time: {now_iso}
+    
+    You are an AI onboarding assistant for ActionMate. A new user just joined and stated their primary mission: "{req.user_mission}".
+    Generate a "Starter Pack" of exactly 3 realistic, specific tasks to help them get started right now.
+    
+    You MUST output ONLY a raw JSON array of objects. Do NOT use markdown code blocks like ```json.
+    Format exactly like this:
+    [
+      {{
+        "title": "Task 1",
+        "estimated_hours": 1.5,
+        "due_date": "2026-06-30T20:00:00",
+        "priority": "high",
+        "blocked_sites": ["youtube.com", "instagram.com"]
+      }}
+    ]
+    """
+    try:
+        response = ollama.chat(
+            model="fluffy/l3-8b-stheno-v3.2:q4_k_m",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return {"tasks_json": response['message']['content']}
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.post("/api/analyze_risk")
 def analyze_risk(task: Task):
     # Prepare the prompt for Ollama
