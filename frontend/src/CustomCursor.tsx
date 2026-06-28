@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 
-export type CursorStyle = 'none' | 'trailing' | 'invert' | 'crosshair' | 'magnetic' | 'glitch' | 'spotlight' | 'liquid';
+export type CursorStyle = 'none' | 'trailing' | 'invert' | 'magnetic' | 'glitch' | 'spotlight' | 'liquid';
 
 export const CustomCursor = ({ type }: { type: CursorStyle }) => {
   const [position, setPosition] = useState({ x: -100, y: -100 });
@@ -79,20 +79,6 @@ export const CustomCursor = ({ type }: { type: CursorStyle }) => {
         transform: `translate(${position.x - (isHovering ? 32 : 12)}px, ${position.y - (isHovering ? 32 : 12)}px)`,
         pointerEvents: 'none', zIndex: 9999, transition: 'transform 0.05s linear, width 0.2s, height 0.2s', mixBlendMode: 'difference'
       }} />
-    );
-  }
-
-  if (type === 'crosshair') {
-    const gap = isHovering ? 20 : 4;
-    return (
-      <div style={{ position: 'fixed', top: 0, left: 0, pointerEvents: 'none', zIndex: 9999 }}>
-        {/* Horizontal */}
-        <div style={{ position: 'absolute', width: '20px', height: '2px', backgroundColor: 'var(--accent-primary)', top: position.y - 1, left: position.x - gap - 20, transition: 'left 0.2s, width 0.2s' }} />
-        <div style={{ position: 'absolute', width: '20px', height: '2px', backgroundColor: 'var(--accent-primary)', top: position.y - 1, left: position.x + gap, transition: 'left 0.2s, width 0.2s' }} />
-        {/* Vertical */}
-        <div style={{ position: 'absolute', width: '2px', height: '20px', backgroundColor: 'var(--accent-primary)', top: position.y - gap - 20, left: position.x - 1, transition: 'top 0.2s, height 0.2s' }} />
-        <div style={{ position: 'absolute', width: '2px', height: '20px', backgroundColor: 'var(--accent-primary)', top: position.y + gap, left: position.x - 1, transition: 'top 0.2s, height 0.2s' }} />
-      </div>
     );
   }
 

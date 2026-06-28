@@ -727,7 +727,6 @@ function App() {
                 <option value="none">Default (None)</option>
                 <option value="trailing">Trailing Circle</option>
                 <option value="invert">Inverting Hover</option>
-                <option value="crosshair">Crosshair (Brutalist FPS)</option>
                 <option value="magnetic">Magnetic Snap (Premium Tech)</option>
                 <option value="glitch">Cyberpunk Glitch (Hacker Mode)</option>
                 <option value="spotlight">Text Spotlight (Focus Mode)</option>
