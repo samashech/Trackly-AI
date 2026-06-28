@@ -4,16 +4,11 @@
   "version": "1.0",
   "description": "Silently blocks distracting websites when you have an overdue task on your ActionMate dashboard.",
   "permissions": [
-    "tabs"
+    "tabs",
+    "scripting"
   ],
   "host_permissions": [
-    "*://*.youtube.com/*",
-    "*://*.instagram.com/*",
-    "*://*.facebook.com/*",
-    "*://*.reddit.com/*",
-    "*://*.twitter.com/*",
-    "*://*.x.com/*",
-    "http://localhost:8000/*"
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js"

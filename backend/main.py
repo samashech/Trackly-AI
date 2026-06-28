@@ -26,6 +26,8 @@ class Task(BaseModel):
     status: str = "pending"
     priority: str = "medium"
     blocked_sites: List[str] = []
+    created_at: Optional[str] = None
+    completed_at: Optional[str] = None
 
 class Habit(BaseModel):
     id: str
@@ -41,7 +43,16 @@ def read_root():
 
 @app.get("/api/tasks")
 def get_tasks():
-    # Return mock data
+    global MOCK_TASKS
+    now = datetime.now()
+    valid_tasks = []
+    for t in MOCK_TASKS:
+        if t.get("status") == "completed" and t.get("completed_at"):
+            completed_date = datetime.fromisoformat(t["completed_at"])
+            if (now - completed_date).days > 7:
+                continue # Auto-cleanup: remove if older than 7 days
+        valid_tasks.append(t)
+    MOCK_TASKS = valid_tasks
     return MOCK_TASKS
 
 @app.post("/api/tasks", response_model=Task)
@@ -55,7 +66,9 @@ def create_task(task: Task):
         "estimated_hours": task.estimated_hours,
         "status": task.status,
         "priority": task.priority,
-        "blocked_sites": task.blocked_sites
+        "blocked_sites": task.blocked_sites,
+        "created_at": task.created_at or datetime.now().isoformat(),
+        "completed_at": None
     }
     MOCK_TASKS.append(new_task)
     return new_task
@@ -64,7 +77,13 @@ def create_task(task: Task):
 def update_task_status(task_id: str, payload: dict):
     for t in MOCK_TASKS:
         if t["id"] == task_id:
+            old_status = t.get("status")
             t["status"] = payload.get("status", t["status"])
+            
+            # Record completed_at time when marked as completed
+            if payload.get("status") == "completed" and old_status != "completed":
+                t["completed_at"] = datetime.now().isoformat()
+                
             if "due_date" in payload:
                 t["due_date"] = payload["due_date"]
             if "estimated_hours" in payload:

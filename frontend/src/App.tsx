@@ -1,4 +1,5 @@
-import { useState, useEffect, FormEvent, KeyboardEvent, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import type { FormEvent, KeyboardEvent } from 'react';
 import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged } from './firebase';
 import type { User } from 'firebase/auth';
 import './index.css';
@@ -480,12 +481,62 @@ function App() {
   const pendingTasks = tasks.filter(t => t.status !== 'completed');
   const criticalTask = pendingTasks.find(t => !t.isAnalyzing && t.riskAnalysis && t.riskAnalysis.risk_score > 70);
 
+  const getDynamicGreeting = () => {
+    if (pendingTasks.length === 0) return `Good evening, ${user?.displayName ? user.displayName.split(' ')[0] : 'there'}.`;
+    const sorted = [...pendingTasks].sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+    const closest = sorted[0];
+    const minsLeft = (new Date(closest.due_date).getTime() - new Date().getTime()) / (1000 * 60);
+
+    if (minsLeft <= 0) return "Lockdown initiated.";
+    if (minsLeft <= 15) return `Tick tock. You have ${Math.ceil(minsLeft)} mins left to finish "${closest.title}".`;
+    if (minsLeft <= 60) return `You are running out of time for "${closest.title}". Focus.`;
+    if (closest.riskAnalysis && closest.riskAnalysis.risk_score > 70) return `My analysis shows a ${closest.riskAnalysis.risk_score}% chance you fail "${closest.title}". Prove me wrong.`;
+    return `Good evening, ${user?.displayName ? user.displayName.split(' ')[0] : 'there'}.`;
+  };
+
+  const getSuggestedRecurringTasks = () => {
+    const completedTasks = tasks.filter(t => t.status === 'completed');
+    const titleCounts: Record<string, number> = {};
+    completedTasks.forEach(t => {
+      titleCounts[t.title] = (titleCounts[t.title] || 0) + 1;
+    });
+    
+    // Find titles done at least twice
+    const recurringTitles = Object.keys(titleCounts).filter(title => titleCounts[title] >= 2);
+    
+    // Filter out if currently pending
+    const pendingTitles = new Set(pendingTasks.map(t => t.title));
+    return recurringTitles.filter(title => !pendingTitles.has(title));
+  };
+  const suggestedTasks = getSuggestedRecurringTasks();
+
   const renderContent = () => {
     if (loading) return <p style={{ color: 'var(--text-secondary)' }}>Loading tasks from backend...</p>;
 
     if (activeTab === 'dashboard' || activeTab === 'tasks') {
       return (
         <>
+          {suggestedTasks.length > 0 && activeTab === 'dashboard' && (
+            <div className="glass-panel animate-fade-in" style={{ padding: '20px', marginBottom: '32px', borderLeft: '4px solid var(--accent-primary)', background: 'var(--bg-secondary)' }}>
+              <h3 style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '1.2rem' }}>🔁</span> Daily Routine Detected
+              </h3>
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '16px', fontSize: '0.95rem' }}>
+                You frequently complete these tasks. Want to add them for today?
+              </p>
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                {suggestedTasks.map(title => (
+                  <button key={title} onClick={() => {
+                    setNewTaskTitle(title);
+                    setShowModal(true);
+                  }} className="hover-lift" style={{ background: 'var(--bg-primary)', border: '1px solid var(--accent-primary)', color: 'var(--text-primary)', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>+</span> {title}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {criticalTask && criticalTask.riskAnalysis && (
             <div className="glass-panel animate-fade-in" style={{ padding: '24px', marginBottom: '32px', borderLeft: '4px solid var(--priority-critical)', background: 'rgba(239, 68, 68, 0.05)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -506,8 +557,14 @@ function App() {
 
           <h3 style={{ marginBottom: '16px' }}>Dynamic Priority List</h3>
           <div style={{ display: 'grid', gap: '16px' }}>
-            {pendingTasks.length > 0 ? pendingTasks.map(task => (
-              <div key={task.id} className="glass-panel hover-lift animate-fade-in" style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {pendingTasks.length > 0 ? pendingTasks.map(task => {
+              const diffMins = (new Date(task.due_date).getTime() - new Date().getTime()) / (1000 * 60);
+              let heartbeatClass = "";
+              if (diffMins > 0 && diffMins <= 30) heartbeatClass = "heartbeat-red";
+              else if (diffMins > 30 && diffMins <= 120) heartbeatClass = "heartbeat-orange";
+              
+              return (
+              <div key={task.id} className={`glass-panel hover-lift animate-fade-in ${heartbeatClass}`} style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
                   <button 
                     onClick={() => updateTaskAPI(task.id, { status: 'completed' })}
@@ -540,7 +597,7 @@ function App() {
                   )}
                 </div>
               </div>
-            )) : (
+            )}) : (
               <div style={{ textAlign: 'center', padding: '64px', background: 'var(--bg-secondary)', borderRadius: '16px', border: '1px dashed var(--border-color)', animation: 'fadeIn 0.5s' }}>
                 <div style={{ width: '64px', height: '64px', background: 'var(--bg-primary)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: '24px' }}>🎯</div>
                 <h3 style={{ marginBottom: '8px' }}>Your dashboard is completely clear</h3>
@@ -635,6 +692,37 @@ function App() {
       );
     }
 
+    if (activeTab === 'history') {
+      const completedTasks = tasks.filter(t => t.status === 'completed');
+      return (
+        <div className="glass-panel animate-fade-in" style={{ padding: '32px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+            <h2 style={{ margin: 0 }}>Completed Tasks</h2>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Auto-cleans every 7 days</div>
+          </div>
+          {completedTasks.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+              <p>No completed tasks in the last 7 days. Time to get to work!</p>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: '16px' }}>
+              {completedTasks.sort((a,b) => b.id.localeCompare(a.id)).map(task => (
+                <div key={task.id} className="glass-panel hover-lift animate-fade-in" style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', opacity: 0.8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
+                    <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--accent-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>✓</div>
+                    <div>
+                      <h4 style={{ fontSize: '1.1rem', marginBottom: '4px', textDecoration: 'line-through', color: 'var(--text-secondary)' }}>{task.title}</h4>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Completed</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
     if (activeTab === 'ai coach') {
       return (
         <div className="glass-panel animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 160px)' }}>
@@ -691,7 +779,7 @@ function App() {
         </div>
         
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-          {['Dashboard', 'Tasks', 'Calendar', 'Habits', 'AI Coach'].map(tab => (
+          {['Dashboard', 'Tasks', 'Calendar', 'Habits', 'History', 'AI Coach'].map(tab => (
             <button 
               key={tab}
               onClick={() => setActiveTab(tab.toLowerCase())}
@@ -733,7 +821,7 @@ function App() {
       <main className="main-content">
         <header style={{ marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h1 style={{ fontSize: '2rem', marginBottom: '8px' }}>Good evening, {user?.displayName ? user.displayName.split(' ')[0] : 'there'}.</h1>
+            <h1 style={{ fontSize: '1.6rem', marginBottom: '8px' }}>{getDynamicGreeting()}</h1>
             <p style={{ color: 'var(--text-secondary)' }}>You have {pendingTasks.length} active tasks.</p>
           </div>
           <button className="btn-primary hover-lift" onClick={() => setShowModal(true)}>+ New Task</button>
