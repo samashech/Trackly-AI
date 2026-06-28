@@ -27,6 +27,7 @@ interface Habit {
   streak: number;
   completed_today: boolean;
   tracked_domains?: string[];
+  requires_proof?: boolean;
 }
 
 interface RiskAnalysis {
@@ -92,6 +93,9 @@ function App() {
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
   const [ignoredSuggestions, setIgnoredSuggestions] = useState<string[]>([]);
   const [selectedHabit, setSelectedHabit] = useState<Habit | null>(null);
+  const [verifyingHabit, setVerifyingHabit] = useState<Habit | null>(null);
+  const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [usageStats, setUsageStats] = useState<Record<string, number>>({});
   const [cursorStyle, setCursorStyle] = useState<CursorStyle>((localStorage.getItem('cursorStyle') as CursorStyle) || 'none');
   const [aiPersonality, setAiPersonality] = useState(localStorage.getItem('aiPersonality') || 'Aggressive Execution Coach');
@@ -298,7 +302,8 @@ function App() {
           title: title,
           streak: 0,
           completed_today: false,
-          tracked_domains: tracked_domains
+          tracked_domains: tracked_domains,
+          requires_proof: tracked_domains.length === 0
         })
       });
       setShowHabitInput(false);
@@ -309,9 +314,15 @@ function App() {
     }
   };
 
-  const toggleHabitAPI = async (id: string) => {
+  const toggleHabitAPI = async (habit: Habit) => {
+    if (habit.requires_proof && !habit.completed_today) {
+      setVerifyingHabit(habit);
+      setVerificationError(null);
+      return;
+    }
+    
     try {
-      await fetch(`http://localhost:8000/api/habits/${id}/toggle`, {
+      await fetch(`http://localhost:8000/api/habits/${habit.id}/toggle`, {
         method: 'PUT'
       });
       fetchHabits();
@@ -966,7 +977,7 @@ function App() {
                   </div>
                 )}
                 <button 
-                  onClick={() => toggleHabitAPI(habit.id)}
+                  onClick={() => toggleHabitAPI(habit)}
                   style={{ width: '40px', height: '40px', borderRadius: '50%', border: 'none', background: habit.completed_today ? 'var(--accent-primary)' : 'var(--bg-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '1.2rem', transition: 'all 0.2s', flexShrink: 0 }}
                   className="hover-lift"
                 >
@@ -1249,7 +1260,76 @@ function App() {
                   This habit does not have any specific websites linked to it for monitoring.
                 </div>
               )}
+              {selectedHabit.requires_proof && (
+                <div style={{ padding: '16px', background: 'var(--bg-primary)', borderRadius: '8px', border: '1px solid var(--border-color)', marginTop: '16px' }}>
+                  <span style={{ color: 'var(--accent-secondary)' }}>📷 Requires Photographic Proof</span>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '4px 0 0' }}>This habit requires an uploaded photo which will be verified by the AI Judge before it can be marked as completed.</p>
+                </div>
+              )}
             </div>
+          </div>
+        </div>
+      )}
+      
+      {verifyingHabit && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)', zIndex: 1001, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setVerifyingHabit(null)}>
+          <div style={{ width: '500px', background: 'var(--bg-secondary)', borderRadius: '16px', border: '1px solid var(--accent-primary)', padding: '32px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+            <h2 style={{ margin: '0 0 8px 0' }}>AI Habit Verification</h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>Provide photographic proof that you completed: <br/><strong style={{ color: 'var(--text-primary)' }}>{verifyingHabit.title}</strong></p>
+            
+            <div style={{ background: 'var(--bg-primary)', border: '2px dashed var(--border-color)', borderRadius: '12px', padding: '40px 20px', marginBottom: '24px' }}>
+              <input 
+                type="file" 
+                accept="image/*" 
+                capture="environment" 
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  
+                  setIsVerifying(true);
+                  setVerificationError(null);
+                  
+                  const reader = new FileReader();
+                  reader.onload = async (event) => {
+                    const base64 = event.target?.result as string;
+                    try {
+                      const res = await fetch(`http://localhost:8000/api/habits/${verifyingHabit.id}/verify`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ image_base64: base64 })
+                      });
+                      const result = await res.json();
+                      if (result.verified) {
+                        fetchHabits();
+                        setVerifyingHabit(null);
+                      } else {
+                        setVerificationError(result.sassy_reason || "Verification failed.");
+                      }
+                    } catch (err) {
+                      setVerificationError("Network error contacting AI Judge.");
+                    } finally {
+                      setIsVerifying(false);
+                    }
+                  };
+                  reader.readAsDataURL(file);
+                }}
+                id="file-upload" 
+                style={{ display: 'none' }}
+                disabled={isVerifying}
+              />
+              <label htmlFor="file-upload" className="btn-primary hover-lift" style={{ cursor: isVerifying ? 'wait' : 'pointer', padding: '12px 24px', display: 'inline-block' }}>
+                {isVerifying ? 'Analyzing Image...' : 'Take Photo / Upload'}
+              </label>
+            </div>
+            
+            {verificationError && (
+              <div className="animate-fade-in" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#ef4444', padding: '16px', borderRadius: '8px', marginBottom: '24px', textAlign: 'left' }}>
+                <strong>AI Judge Rejected:</strong><br/>
+                {verificationError}
+              </div>
+            )}
+            
+            <button onClick={() => setVerifyingHabit(null)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>Cancel</button>
           </div>
         </div>
       )}

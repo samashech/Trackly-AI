@@ -35,6 +35,7 @@ class Habit(BaseModel):
     streak: int = 0
     completed_today: bool = False
     tracked_domains: List[str] = []
+    requires_proof: bool = False
 
 MOCK_TASKS = []
 
@@ -145,6 +146,52 @@ def delete_habit(habit_id: str):
     global MOCK_HABITS
     MOCK_HABITS = [h for h in MOCK_HABITS if h["id"] != habit_id]
     return {"status": "deleted"}
+
+class VerifyPayload(BaseModel):
+    image_base64: str
+
+@app.post("/api/habits/{habit_id}/verify")
+def verify_habit(habit_id: str, payload: VerifyPayload):
+    target_habit = next((h for h in MOCK_HABITS if h["id"] == habit_id), None)
+    if not target_habit:
+        return {"error": "not found"}
+
+    prompt = f"You are a strict judge. The user claims they completed the habit: '{target_habit['title']}'. Look at this photo. Does it prove they did it? (e.g. for waking up: a sunrise or coffee. for gym: gym equipment. for studying: a book or laptop). Reply ONLY with valid JSON: {{\"verified\": true, \"sassy_reason\": \"Good job\"}} or {{\"verified\": false, \"sassy_reason\": \"Nice try, this is just a wall.\"}}"
+    
+    b64_data = payload.image_base64
+    if "base64," in b64_data:
+        b64_data = b64_data.split("base64,")[1]
+
+    try:
+        response = ollama.generate(
+            model='moondream',
+            prompt=prompt,
+            images=[b64_data]
+        )
+        resp_text = response['response'].strip()
+        
+        # Try to parse JSON from Moondream's output
+        if "```json" in resp_text:
+            resp_text = resp_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in resp_text:
+            resp_text = resp_text.replace("```", "").strip()
+            
+        try:
+            result = json.loads(resp_text)
+        except json.JSONDecodeError:
+            # Fallback if moondream doesn't format JSON perfectly
+            if "true" in resp_text.lower() and "false" not in resp_text.lower():
+                result = {"verified": True, "sassy_reason": resp_text}
+            else:
+                result = {"verified": False, "sassy_reason": resp_text}
+        
+        if result.get("verified"):
+            target_habit["completed_today"] = True
+            target_habit["streak"] += 1
+            
+        return result
+    except Exception as e:
+        return {"verified": False, "sassy_reason": f"AI Verification failed: {str(e)}"}
 
 class OnboardingRequest(BaseModel):
     user_mission: str
