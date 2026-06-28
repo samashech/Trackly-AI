@@ -1,3 +1,25 @@
+// Function to inject the permanent critical task widget
+function injectCriticalWidget(taskTitles) {
+  if (document.getElementById('actionmate-critical-widget')) return;
+  const widget = document.createElement('div');
+  widget.id = 'actionmate-critical-widget';
+  widget.style.position = 'fixed';
+  widget.style.bottom = '20px';
+  widget.style.left = '20px';
+  widget.style.background = '#1e1e2f'; // Match dashboard dark theme
+  widget.style.color = '#ff5555'; // Critical priority red
+  widget.style.border = '2px solid #ff5555';
+  widget.style.padding = '12px 16px';
+  widget.style.borderRadius = '8px';
+  widget.style.fontWeight = 'bold';
+  widget.style.fontSize = '14px';
+  widget.style.zIndex = '9999999';
+  widget.style.boxShadow = '4px 4px 0px #ff5555';
+  widget.style.fontFamily = 'system-ui, sans-serif';
+  widget.innerHTML = `⚠️ CRITICAL: ${taskTitles}`;
+  document.body.appendChild(widget);
+}
+
 // Function to inject the banner directly into the webpage
 function injectWarningBanner(taskTitle, minsLeft) {
   if (document.getElementById('actionmate-warning')) return; // Already injected
@@ -34,12 +56,17 @@ async function getTaskStates() {
     
     let overdueDomains = [];
     let warningTasks = []; 
+    let criticalTasks = []; 
 
     for (const task of tasks) {
       if (task.status === 'completed') continue;
       
       const dueDate = new Date(task.due_date);
       const diffMins = (dueDate.getTime() - now.getTime()) / (1000 * 60);
+      
+      if (task.priority === 'critical') {
+        criticalTasks.push(task.title);
+      }
       
       if (diffMins <= 0) {
         // Task is failed - collect blocked sites for hard redirect
@@ -58,9 +85,9 @@ async function getTaskStates() {
       }
     }
     
-    return { overdueDomains, warningTasks };
+    return { overdueDomains, warningTasks, criticalTasks };
   } catch (error) {
-    return { overdueDomains: [], warningTasks: [] };
+    return { overdueDomains: [], warningTasks: [], criticalTasks: [] };
   }
 }
 
@@ -93,6 +120,15 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
             break; // Only show one banner
           }
         }
+      }
+      
+      // 3. Is there a critical task? If so, always display the permanent widget
+      if (states.criticalTasks && states.criticalTasks.length > 0) {
+        chrome.scripting.executeScript({
+          target: { tabId: tabId },
+          func: injectCriticalWidget,
+          args: [states.criticalTasks.join(', ')]
+        });
       }
     } catch (e) {
       // Ignore internal browser URLs like chrome://

@@ -220,6 +220,8 @@ def chat_with_ai(req: ChatRequest):
     
     Answer the user's questions based on their tasks. If they ask what to do, prioritize tasks with high risk scores.
     Be concise, direct, and actionable.
+    
+    CRITICAL FORMATTING RULE: ALWAYS respond using clear bullet points. Every single point must be on a new line. Never use long paragraphs.
     """
     
     # Prepend system prompt to the messages

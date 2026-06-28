@@ -42,6 +42,42 @@ interface ChatMessage {
   content: string;
 }
 
+function TaskModal({ task, onClose }: { task: TaskWithRisk; onClose: () => void }) {
+  const [isClosing, setIsClosing] = useState(false);
+
+  const handleClose = () => {
+    setIsClosing(true);
+    setTimeout(onClose, 480);
+  };
+
+  return (
+    <div className={`modal-overlay ${isClosing ? 'closing' : ''}`} onClick={handleClose}>
+      <div className={`modal-dialog ${isClosing ? 'closing' : ''}`} onClick={e => e.stopPropagation()}>
+        <div style={{ padding: '24px 24px 0 24px', borderBottom: '1px solid var(--border-color)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h2 style={{ fontSize: '1.2rem', margin: 0 }}>Task Details</h2>
+            <button onClick={handleClose} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.2rem' }}>&times;</button>
+          </div>
+        </div>
+        <div style={{ padding: '24px' }}>
+          <ul style={{ listStyleType: 'disc', paddingLeft: '20px', color: 'var(--text-primary)', lineHeight: 1.8 }}>
+            <li><strong>Name:</strong> {task.title}</li>
+            <li><strong>Priority:</strong> <span style={{ color: `var(--priority-${task.priority})`, textTransform: 'capitalize' }}>{task.priority}</span></li>
+            <li><strong>Due Date:</strong> {new Date(task.due_date).toLocaleString()}</li>
+            <li><strong>Estimated Hours:</strong> {task.estimated_hours}h</li>
+            {task.riskAnalysis && task.riskAnalysis.risk_score !== -1 && (
+              <li><strong>Risk Score:</strong> {task.riskAnalysis.risk_score}% chance of failure</li>
+            )}
+            {task.blocked_sites && task.blocked_sites.length > 0 && (
+              <li><strong>Blocked Sites:</strong> {task.blocked_sites.join(', ')}</li>
+            )}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   // Authentication State
   const [user, setUser] = useState<User | null>(null);
@@ -49,6 +85,8 @@ function App() {
 
   // App State
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
+  const [ignoredSuggestions, setIgnoredSuggestions] = useState<string[]>([]);
   const [tasks, setTasks] = useState<TaskWithRisk[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [showHabitInput, setShowHabitInput] = useState(false);
@@ -82,6 +120,7 @@ function App() {
 
   // Modal State
   const [showModal, setShowModal] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<TaskWithRisk | null>(null);
   const [modalTab, setModalTab] = useState<'manual' | 'ai'>('manual');
   
   // Manual Form State
@@ -162,7 +201,7 @@ function App() {
     }
   };
 
-  const fetchTasksAndAnalyze = async () => {
+  async function fetchTasksAndAnalyze() {
     setLoading(true);
     try {
       const response = await fetch('http://localhost:8000/api/tasks');
@@ -203,7 +242,7 @@ function App() {
     }
   };
 
-  const fetchHabits = async () => {
+  async function fetchHabits() {
     try {
       const response = await fetch('http://localhost:8000/api/habits');
       const data = await response.json();
@@ -213,13 +252,13 @@ function App() {
     }
   };
 
-  const createHabitAPI = async (title: string) => {
+  async function createHabitAPI(title: string) {
     try {
       await fetch('http://localhost:8000/api/habits', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: Math.random().toString(36).substring(7),
+          id: crypto.randomUUID(),
           title: title,
           streak: 0,
           completed_today: false
@@ -288,13 +327,16 @@ function App() {
   };
 
   const updateTaskAPI = async (taskId: string, payload: Partial<Task>) => {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...payload } : t));
     try {
       await fetch(`http://localhost:8000/api/tasks/${taskId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      fetchTasksAndAnalyze();
+      if (payload.status !== 'completed') {
+        fetchTasksAndAnalyze();
+      }
     } catch (err) {
       console.error("Failed to update task", err);
     }
@@ -366,7 +408,7 @@ function App() {
           }
         } 
         setPlannerMessages(prev => [...prev, { role: 'assistant', content: replyText }]);
-      } catch (err) {
+      } catch {
         setPlannerMessages(prev => [...prev, { role: 'assistant', content: "Network error communicating with local AI." }]);
       } finally {
         setIsPlanning(false);
@@ -413,7 +455,7 @@ function App() {
           }
         }
         setLockdownChat(prev => [...prev, { role: 'assistant', content: replyText }]);
-      } catch (err) {
+      } catch {
         setLockdownChat(prev => [...prev, { role: 'assistant', content: "System error communicating with AI Coach." }]);
       }
     }
@@ -440,7 +482,7 @@ function App() {
         
         const data = await response.json();
         setChatMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
-      } catch (err) {
+      } catch {
         setChatMessages(prev => [...prev, { role: 'assistant', content: "Network error. Make sure the FastAPI server is running." }]);
       } finally {
         setIsChatting(false);
@@ -608,14 +650,14 @@ function App() {
     // Find titles done at least twice
     const recurringTitles = Object.keys(titleCounts).filter(title => titleCounts[title] >= 2);
     
-    // Filter out if currently pending
+    // Filter out if currently pending or manually ignored
     const pendingTitles = new Set(pendingTasks.map(t => t.title));
-    return recurringTitles.filter(title => !pendingTitles.has(title));
+    return recurringTitles.filter(title => !pendingTitles.has(title) && !ignoredSuggestions.includes(title));
   };
   const suggestedTasks = getSuggestedRecurringTasks();
 
   const renderContent = () => {
-    if (loading) return <p style={{ color: 'var(--text-secondary)' }}>Loading tasks from backend...</p>;
+    if (loading && tasks.length === 0) return <p style={{ color: 'var(--text-secondary)' }}>Loading tasks from backend...</p>;
 
     if (activeTab === 'dashboard') {
       return (
@@ -630,12 +672,20 @@ function App() {
               </p>
               <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                 {suggestedTasks.map(title => (
-                  <button key={title} onClick={() => {
-                    setNewTaskTitle(title);
-                    setShowModal(true);
-                  }} className="hover-lift" style={{ background: 'var(--bg-primary)', border: '1px solid var(--accent-primary)', color: 'var(--text-primary)', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span>+</span> {title}
-                  </button>
+                  <div key={title} style={{ display: 'flex', background: 'var(--bg-primary)', border: '1px solid var(--accent-primary)', borderRadius: '8px', overflow: 'hidden' }} className="hover-lift">
+                    <button onClick={() => {
+                      setNewTaskTitle(title);
+                      setShowModal(true);
+                    }} style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>+</span> {title}
+                    </button>
+                    <button onClick={(e) => {
+                      e.stopPropagation();
+                      setIgnoredSuggestions(prev => [...prev, title]);
+                    }} style={{ background: 'rgba(255,0,0,0.1)', border: 'none', borderLeft: '1px solid var(--accent-primary)', color: 'var(--priority-critical)', padding: '8px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Dismiss suggestion">
+                      ✕
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>
@@ -652,11 +702,24 @@ function App() {
               else if (diffMins > 30 && diffMins <= 120) heartbeatClass = "heartbeat-orange";
               
               return (
-              <div key={task.id} className={`glass-panel hover-lift animate-fade-in ${heartbeatClass}`} style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div key={task.id} onClick={() => setSelectedTask(task)} className={`glass-panel hover-lift animate-fade-in ${heartbeatClass}`} style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', position: 'relative' }}>
+                {completingTaskId === task.id && (
+                  <>
+                    <div className="task-completion-slider"></div>
+                    <div className="task-completion-text">Done ✅</div>
+                  </>
+                )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
                   <button 
-                    onClick={() => updateTaskAPI(task.id, { status: 'completed' })}
-                    style={{ width: '24px', height: '24px', borderRadius: '50%', border: `2px solid var(--priority-${task.priority})`, background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      setCompletingTaskId(task.id);
+                      setTimeout(() => {
+                        updateTaskAPI(task.id, { status: 'completed' });
+                        setCompletingTaskId(null);
+                      }, 1000);
+                    }}
+                    style={{ width: '24px', height: '24px', borderRadius: '50%', border: `2px solid var(--priority-${task.priority})`, background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 12 }}
                     className="hover-lift"
                     title="Mark as complete"
                   ></button>
@@ -665,7 +728,8 @@ function App() {
                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <span>Due: {formatDate(task.due_date)}</span>
                       <span>• Est: {task.estimated_hours}h</span>
-                      <button onClick={() => {
+                      <button onClick={(e) => {
+                        e.stopPropagation();
                         setActiveTab('ai tutor');
                         setChatInput(`I need guidance on my task: "${task.title}". Can you break it down or help me start?`);
                       }} className="hover-lift" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--accent-primary)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -891,12 +955,7 @@ function App() {
             <button 
               key={tab}
               onClick={() => setActiveTab(tab.toLowerCase())}
-              style={{
-                background: activeTab === tab.toLowerCase() ? 'var(--bg-glass)' : 'transparent',
-                color: activeTab === tab.toLowerCase() ? 'var(--text-primary)' : 'var(--text-secondary)',
-                border: 'none', padding: '12px 16px', borderRadius: '8px', textAlign: 'left', cursor: 'pointer', fontWeight: 500, transition: 'all 0.2s',
-                borderLeft: activeTab === tab.toLowerCase() ? '3px solid var(--accent-primary)' : '3px solid transparent'
-              }}
+              className={`sidebar-tab ${activeTab === tab.toLowerCase() ? 'active' : ''}`}
             >
               {tab}
             </button>
@@ -1002,6 +1061,7 @@ function App() {
           </div>
         </div>
       )}
+      {selectedTask && <TaskModal task={selectedTask} onClose={() => setSelectedTask(null)} />}
       <style>{`@keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }`}</style>
     </div>
   );
