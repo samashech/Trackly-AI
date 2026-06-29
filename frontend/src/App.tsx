@@ -136,6 +136,7 @@ function App() {
 
   // Modal State
   const [showModal, setShowModal] = useState(false);
+  const [editingTask, setEditingTask] = useState<any>(null);
   const [selectedTask, setSelectedTask] = useState<TaskWithRisk | null>(null);
   const [modalTab, setModalTab] = useState<'manual' | 'ai'>('manual');
   
@@ -390,7 +391,29 @@ function App() {
       setNewTaskBlockedSites('');
       fetchTasksAndAnalyze();
     } catch (err) {
-      console.error("Failed to create task", err);
+      console.error(err);
+    }
+  };
+
+  const handleEditSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!editingTask) return;
+    try {
+      await fetch(`http://localhost:8000/api/tasks/${editingTask.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editingTask.title,
+          estimated_hours: parseFloat(editingTask.estimated_hours) || 1,
+          due_date: editingTask.due_date,
+          priority: editingTask.priority,
+          blocked_sites: editingTask.blocked_sites_str ? editingTask.blocked_sites_str.split(',').map((s:string) => s.trim()).filter((s:string) => s) : []
+        })
+      });
+      setEditingTask(null);
+      fetchTasksAndAnalyze();
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -924,6 +947,15 @@ function App() {
                       {task.riskAnalysis && task.riskAnalysis.risk_score !== -1 ? `${task.riskAnalysis.risk_score}%` : 'Error'}
                     </div>
                   )}
+                  <button onClick={(e) => {
+                    e.stopPropagation();
+                    setEditingTask({
+                      ...task,
+                      blocked_sites_str: (task.blocked_sites || []).join(', ')
+                    });
+                  }} className="hover-lift" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', marginTop: '8px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', width: '100%', gap: '6px', fontSize: '0.85rem' }}>
+                    ✏️ Edit
+                  </button>
                 </div>
               </div>
             )}) : (
@@ -1196,6 +1228,30 @@ function App() {
         {renderContent()}
       </main>
 
+
+      {/* Edit Task Modal */}
+      {editingTask && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel animate-fade-in" style={{ width: '450px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
+            <div style={{ padding: '24px 24px 0 24px', borderBottom: '1px solid var(--border-color)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h2 style={{ fontSize: '1.2rem', margin: 0 }}>Edit Task</h2>
+                <button onClick={() => setEditingTask(null)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.2rem' }}>&times;</button>
+              </div>
+            </div>
+            <form onSubmit={handleEditSubmit} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Task Title</label><input required type="text" value={editingTask.title} onChange={e => setEditingTask({...editingTask, title: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }} /></div>
+              <div style={{ display: 'flex', gap: '16px' }}>
+                <div style={{ flex: 1 }}><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Est. Hours</label><input required type="number" step="0.5" min="0" value={editingTask.estimated_hours} onChange={e => setEditingTask({...editingTask, estimated_hours: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }} /></div>
+                <div style={{ flex: 1 }}><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Priority</label><select value={editingTask.priority} onChange={e => setEditingTask({...editingTask, priority: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></div>
+              </div>
+              <div><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Due Date & Time</label><input required type="datetime-local" value={editingTask.due_date.substring(0, 16)} onChange={e => setEditingTask({...editingTask, due_date: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }} /></div>
+              <div><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Blocked Sites</label><input type="text" value={editingTask.blocked_sites_str} onChange={e => setEditingTask({...editingTask, blocked_sites_str: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }} /></div>
+              <div style={{ marginTop: '16px', display: 'flex', gap: '12px', justifyContent: 'flex-end' }}><button type="button" onClick={() => setEditingTask(null)} style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer' }} className="hover-lift">Cancel</button><button type="submit" className="btn-primary hover-lift">Save Changes</button></div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* New Task Modal */}
       {showModal && (

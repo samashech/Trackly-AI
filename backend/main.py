@@ -99,23 +99,33 @@ def create_task(task: Task, user_id: str = Depends(get_user_id)):
     return new_task
 
 @app.put("/api/tasks/{task_id}")
-def update_task_status(task_id: str, payload: dict):
+def update_task_status(task_id: str, payload: dict, user_id: str = Depends(get_user_id)):
     for t in DB['tasks'].get(user_id, []):
         if t["id"] == task_id:
             old_status = t.get("status")
-            t["status"] = payload.get("status", t["status"])
+            if "status" in payload:
+                t["status"] = payload["status"]
             
             # Record completed_at time when marked as completed
             if payload.get("status") == "completed" and old_status != "completed":
                 t["completed_at"] = datetime.now().isoformat()
                 
-            if "due_date" in payload:
-                t["due_date"] = payload["due_date"]
-            if "estimated_hours" in payload:
-                t["estimated_hours"] = payload["estimated_hours"]
+            if "due_date" in payload: t["due_date"] = payload["due_date"]
+            if "estimated_hours" in payload: t["estimated_hours"] = payload["estimated_hours"]
+            if "title" in payload: t["title"] = payload["title"]
+            if "priority" in payload: t["priority"] = payload["priority"]
+            if "blocked_sites" in payload: t["blocked_sites"] = payload["blocked_sites"]
+            
             save_db(DB)
             return t
     return {"error": "not found"}
+
+@app.delete("/api/tasks/{task_id}")
+def delete_task(task_id: str, user_id: str = Depends(get_user_id)):
+    if user_id in DB['tasks']:
+        DB['tasks'][user_id] = [t for t in DB['tasks'][user_id] if t["id"] != task_id]
+        save_db(DB)
+    return {"status": "ok"}
 
 
 
@@ -341,24 +351,24 @@ def planner_chat(req: PlannerChatRequest):
     You are an AI Task Planner. Your goal is to help the user create a highly specific task for their execution dashboard.
     The current date and time is: {current_time}.
     
-    You must gather 5 pieces of information from the user:
-    1. Title (What they want to do)
-    2. Estimated Hours (How long it will take, a float number e.g. 2.5)
-    3. Priority (must be exactly one of: "critical", "high", "medium", "low")
-    4. Due Date: Accept ANY natural language format from the user (e.g. "25 june 8 pm", "tomorrow"). Do NOT ask them to reformat it. You must silently convert their answer into a strict ISO datetime string based on the current time.
-    5. Blocked Sites: Ask them if there are any distracting websites (like youtube or instagram) they want blocked if they miss the deadline. Convert their casual names into a JSON array of standard root domains (e.g., ["youtube.com", "instagram.com"]).
-
-    CRITICAL RULES:
-    - DO NOT use long conversational paragraphs.
-    - If you are missing information, reply ONLY with a concise bulleted list of what you still need. Example:
-      "Got it. I still need:
-      - Estimated duration in hours
-      - Due date/time
-      - Priority level
-      - Any websites to block if you fail"
-    - NEVER mention the word "JSON", "code", or "compiling" to the user.
+    You need to collect 5 details from the user:
+    1. Title
+    2. Estimated Hours
+    3. Priority level
+    4. Due Date
+    5. Blocked Sites
     
-    IMPORTANT TRIGGER: ONCE you have gathered ALL 5 pieces of information, you MUST output ONLY a JSON block like this, surrounded by triple backticks:
+    CRITICAL RULES:
+    - If the user provides a natural language due date (e.g., "tomorrow at 5pm"), you MUST accept it. DO NOT ask them to format it as an ISO string. You will do the conversion yourself at the end.
+    - If the user says "1 hour", accept it. DO NOT ask them to format it as a float.
+    - If you are missing any of the 5 pieces of information, reply ONLY with a concise bulleted list of what you still need. DO NOT ask for exact formats.
+      Example:
+      "Got it. I still need:
+      - Estimated duration
+      - Any websites to block"
+    - NEVER mention the word "JSON", "ISO format", or "float" to the user.
+    
+    IMPORTANT TRIGGER: ONCE you have all 5 pieces of information (even in casual language), you MUST STOP conversing and output ONLY a JSON block, surrounded by triple backticks, where YOU format the data correctly:
     ```json
     {{
       "action": "CREATE_TASK",
