@@ -99,7 +99,7 @@ function App() {
   const [usageStats, setUsageStats] = useState<Record<string, number>>({});
   const [cursorStyle, setCursorStyle] = useState<CursorStyle>((localStorage.getItem('cursorStyle') as CursorStyle) || 'none');
   const [aiPersonality, setAiPersonality] = useState(localStorage.getItem('aiPersonality') || 'Aggressive Execution Coach');
-  const [aiTutorName, setAiTutorName] = useState(localStorage.getItem('aiTutorName') || 'Troy');
+  const [aiTutorName, setAiTutorName] = useState(localStorage.getItem('aiTutorName') || 'AI Tutor');
   const [animationsEnabled, setAnimationsEnabled] = useState(localStorage.getItem('animationsEnabled') !== 'false');
   const [warningTime, setWarningTime] = useState(Number(localStorage.getItem('warningTime')) || 15);
   const [globalBlocklist, setGlobalBlocklist] = useState(localStorage.getItem('globalBlocklist') || '');
@@ -141,6 +141,153 @@ function App() {
   const [selectedTask, setSelectedTask] = useState<TaskWithRisk | null>(null);
   const [modalTab, setModalTab] = useState<'manual' | 'ai' | 'upload'>('manual');
   const [isUploadingSchedule, setIsUploadingSchedule] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [isFeatureTourActive, setIsFeatureTourActive] = useState(false);
+  const [tourStep, setTourStep] = useState(0);
+
+  const TOUR_STEPS = [
+    {
+      title: "The Execution Dashboard",
+      description: "Welcome to your Execution OS. The AI constantly analyzes your deadlines and warns you if you are at risk. Click the '+ New Task' button in the top right to continue.",
+    },
+    {
+      title: "AI Task Planner",
+      description: "Don't type your tasks manually. You can just click the microphone to talk to the AI Planner! Click 'Cancel' or click outside the window to close this and continue the tour.",
+    },
+    {
+      title: "Your Personal AI Coach",
+      description: "Feeling stuck or procrastinating? Click the 'AI Tutor' tab on the left sidebar to meet your coach.",
+    },
+    {
+      title: "Habit Tracker with Proof",
+      description: "Build unshakeable discipline. Click the 'Habits' tab on the left to see our vision-based habit tracker.",
+    },
+    {
+      title: "Customization",
+      description: "Finally, customize your experience. Click the 'Settings' tab on the left to finish the tour!",
+    }
+  ];
+
+  const advanceTour = (stepCompleted: number) => {
+    if (tourStep === stepCompleted) {
+      if (tourStep < TOUR_STEPS.length - 1) {
+        setTourStep(prev => prev + 1);
+      } else {
+        setIsFeatureTourActive(false);
+        localStorage.setItem(`hasCompletedFeatureTour_${auth.currentUser?.uid}`, 'true');
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (user && !isOnboarding && !authLoading) {
+      const hasSeenTour = localStorage.getItem(`hasCompletedFeatureTour_${user.uid}`);
+      if (!hasSeenTour) {
+        setIsFeatureTourActive(true);
+        setTourStep(0);
+      }
+    }
+  }, [user, isOnboarding, authLoading]);
+
+  useEffect(() => {
+    if (!isFeatureTourActive) return;
+    
+    let animationFrameId: number;
+    
+    const updateLine = () => {
+      const svgPath = document.getElementById('tour-line-path');
+      const svgArrow = document.getElementById('tour-line-arrow');
+      const target = document.querySelector('.tour-target');
+      
+      if (target && svgPath && svgArrow) {
+        const rect = target.getBoundingClientRect();
+        const modalRect = document.getElementById('tour-modal-box')?.getBoundingClientRect();
+        
+        if (modalRect) {
+          const startX = modalRect.left - 10;
+          const startY = modalRect.top + 30;
+          
+          let endX = rect.left + rect.width / 2;
+          let endY = rect.top + rect.height / 2;
+          
+          svgPath.setAttribute('d', `M ${startX} ${startY} Q ${startX} ${endY}, ${endX} ${endY}`);
+          svgArrow.setAttribute('cx', endX.toString());
+          svgArrow.setAttribute('cy', endY.toString());
+        }
+      }
+      animationFrameId = requestAnimationFrame(updateLine);
+    };
+    
+    updateLine();
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [isFeatureTourActive, tourStep]);
+  const recognitionRef = useRef<any>(null);
+  const manualStopRef = useRef(false);
+
+  const toggleListening = (currentInput: string, setInputCallback: (val: string) => void) => {
+    if (isListening && recognitionRef.current) {
+      manualStopRef.current = true;
+      recognitionRef.current.stop();
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Your browser does not support voice input. Please use Chrome.");
+      return;
+    }
+    
+    manualStopRef.current = false;
+    const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    
+    let baseString = currentInput ? currentInput.trim() + ' ' : '';
+    let activeSessionTranscript = '';
+    
+    recognition.onstart = () => setIsListening(true);
+    
+    recognition.onresult = (event: any) => {
+      let finalStr = '';
+      let interimStr = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalStr += event.results[i][0].transcript;
+        } else {
+          interimStr += event.results[i][0].transcript;
+        }
+      }
+      activeSessionTranscript = finalStr;
+      setInputCallback(baseString + finalStr + interimStr);
+    };
+    
+    recognition.onerror = (event: any) => {
+      if (event.error !== 'no-speech') {
+        console.error("Speech error", event.error);
+        manualStopRef.current = true;
+      }
+    };
+    
+    recognition.onend = () => {
+      if (!manualStopRef.current) {
+        baseString = baseString + activeSessionTranscript;
+        activeSessionTranscript = '';
+        setTimeout(() => {
+          try {
+            recognition.start();
+          } catch(e) {
+            setIsListening(false);
+          }
+        }, 100);
+      } else {
+        setIsListening(false);
+        recognitionRef.current = null;
+      }
+    };
+    
+    recognition.start();
+  };
   
   // Manual Form State
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -865,7 +1012,12 @@ function App() {
                 for (const h of habits) await fetch(`http://localhost:8000/api/habits/${h.id}`, { method: 'DELETE' });
                 setTasks([]);
                 setHabits([]);
-                if (user?.uid) localStorage.removeItem(`hasCompletedOnboarding_${user.uid}`);
+                if (user?.uid) {
+                  localStorage.removeItem(`hasCompletedOnboarding_${user.uid}`);
+                  localStorage.removeItem(`hasCompletedFeatureTour_${user.uid}`);
+                }
+                localStorage.removeItem('aiTutorName');
+                setAiTutorName('AI Tutor');
                 alert('All data wiped.');
                 window.location.reload();
               }
@@ -1163,14 +1315,18 @@ function App() {
             )}
             <div ref={chatEndRef} />
           </div>
-          <div style={{ padding: '24px', borderTop: '1px solid var(--border-color)' }}>
+          <div style={{ padding: '24px', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '8px' }}>
+            <button onClick={() => toggleListening(chatInput, setChatInput)} title="Voice Input" style={{ background: isListening ? 'var(--priority-critical)' : 'var(--bg-primary)', border: '1px solid var(--border-color)', color: isListening ? '#fff' : 'var(--text-secondary)', borderRadius: '50%', width: '48px', height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s ease', animation: isListening ? 'micPulse 1.5s infinite' : 'none', flexShrink: 0 }}>
+              🎤
+            </button>
             <input 
               type="text" 
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}
               onKeyDown={handleChatSubmit}
-              placeholder="Ask for help planning your day (Press Enter to send)..." 
-              style={{ width: '100%', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'white', fontSize: '1rem', outline: 'none' }} 
+              placeholder={`Ask ${aiTutorName} anything...`}
+              style={{ flex: 1, padding: '14px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }} 
+              disabled={isChatting}
             />
           </div>
         </div>
@@ -1203,17 +1359,27 @@ function App() {
         </div>
         
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-          {['Dashboard', 'Calendar', 'Habits', 'History', 'AI Tutor'].map(tab => (
-            <button 
-              key={tab}
-              onClick={() => setActiveTab(tab.toLowerCase())}
-              className={`sidebar-tab ${activeTab === tab.toLowerCase() ? 'active' : ''}`}
-              title={tab}
-            >
-              <span className="sidebar-icon" style={{ fontSize: '1.2rem', display: 'inline-block', width: '24px', textAlign: 'center' }}>{TAB_ICONS[tab]}</span>
-              {!isSidebarCollapsed && <span className="sidebar-text" style={{ marginLeft: '12px' }}>{tab === 'AI Tutor' ? aiTutorName : tab}</span>}
-            </button>
-          ))}
+          {['Dashboard', 'Calendar', 'Habits', 'History', 'AI Tutor'].map(tab => {
+            const isTutorTarget = isFeatureTourActive && tourStep === 2 && tab === 'AI Tutor';
+            const isHabitsTarget = isFeatureTourActive && tourStep === 3 && tab === 'Habits';
+            return (
+              <button 
+                key={tab}
+                onClick={() => {
+                  setActiveTab(tab.toLowerCase());
+                  if (isFeatureTourActive) {
+                    if (tourStep === 2 && tab === 'AI Tutor') advanceTour(2);
+                    if (tourStep === 3 && tab === 'Habits') advanceTour(3);
+                  }
+                }}
+                className={`sidebar-tab ${activeTab === tab.toLowerCase() ? 'active' : ''} ${isTutorTarget || isHabitsTarget ? 'tour-target' : ''}`}
+                title={tab}
+              >
+                <span className="sidebar-icon" style={{ fontSize: '1.2rem', display: 'inline-block', width: '24px', textAlign: 'center' }}>{TAB_ICONS[tab]}</span>
+                {!isSidebarCollapsed && <span className="sidebar-text" style={{ marginLeft: '12px' }}>{tab === 'AI Tutor' ? aiTutorName : tab}</span>}
+              </button>
+            );
+          })}
         </nav>
 
         <div style={{ marginTop: 'auto', paddingTop: '24px', borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column' }}>
@@ -1233,8 +1399,11 @@ function App() {
              )}
           </div>
           <button 
-            onClick={() => setActiveTab('settings')}
-            className={`sidebar-tab ${activeTab === 'settings' ? 'active' : ''} hover-lift`}
+            onClick={() => {
+              setActiveTab('settings');
+              if (isFeatureTourActive && tourStep === 4) advanceTour(4);
+            }}
+            className={`sidebar-tab ${activeTab === 'settings' ? 'active' : ''} hover-lift ${isFeatureTourActive && tourStep === 4 ? 'tour-target' : ''}`}
             title="Settings"
             style={{ display: 'flex', alignItems: 'center', width: '100%', marginTop: '16px', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', padding: '12px', justifyContent: isSidebarCollapsed ? 'center' : 'flex-start' }}
           >
@@ -1250,7 +1419,11 @@ function App() {
             <h1 style={{ fontSize: '1.6rem', marginBottom: '8px' }}>{getDynamicGreeting()}</h1>
             <p style={{ color: 'var(--text-secondary)' }}>You have {pendingTasks.length} active tasks.</p>
           </div>
-          <button className="btn-primary hover-lift" onClick={() => setShowModal(true)}>+ New Task</button>
+          <button className={`btn-primary hover-lift ${isFeatureTourActive && tourStep === 0 ? 'tour-target' : ''}`} onClick={() => {
+            setShowModal(true);
+            setModalTab('ai');
+            if (isFeatureTourActive && tourStep === 0) advanceTour(0);
+          }}>+ New Task</button>
         </header>
         {renderContent()}
       </main>
@@ -1282,12 +1455,18 @@ function App() {
 
       {/* New Task Modal */}
       {showModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div className="glass-panel animate-fade-in" style={{ width: '450px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => {
+          setShowModal(false);
+          if (isFeatureTourActive && tourStep === 1) advanceTour(1);
+        }}>
+          <div className="glass-panel animate-fade-in" style={{ width: '450px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }} onClick={e => e.stopPropagation()}>
             <div style={{ padding: '24px 24px 0 24px', borderBottom: '1px solid var(--border-color)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                 <h2 style={{ fontSize: '1.2rem', margin: 0 }}>Create New Task</h2>
-                <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.2rem' }}>&times;</button>
+                <button onClick={() => {
+                  setShowModal(false);
+                  if (isFeatureTourActive && tourStep === 1) advanceTour(1);
+                }} className={isFeatureTourActive && tourStep === 1 ? 'tour-target' : ''} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.2rem' }}>&times;</button>
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button onClick={() => setModalTab('manual')} style={{ padding: '8px 16px', background: 'none', border: 'none', cursor: 'pointer', borderBottom: modalTab === 'manual' ? '2px solid var(--accent-primary)' : '2px solid transparent', color: modalTab === 'manual' ? 'var(--text-primary)' : 'var(--text-secondary)' }}>Manual Entry</button>
@@ -1305,7 +1484,10 @@ function App() {
                 </div>
                 <div><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Due Date & Time</label><input required type="datetime-local" value={newTaskDate} onChange={e => setNewTaskDate(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }} /></div>
                 <div><label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Blocked Sites (comma separated)</label><input type="text" value={newTaskBlockedSites} onChange={e => setNewTaskBlockedSites(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }} placeholder="e.g. youtube, netflix.com" /></div>
-                <div style={{ marginTop: '16px', display: 'flex', gap: '12px', justifyContent: 'flex-end' }}><button type="button" onClick={() => setShowModal(false)} style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer' }} className="hover-lift">Cancel</button><button type="submit" className="btn-primary hover-lift">Create Task</button></div>
+                <div style={{ marginTop: '16px', display: 'flex', gap: '12px', justifyContent: 'flex-end' }}><button type="button" onClick={() => {
+                  setShowModal(false);
+                  if (isFeatureTourActive && tourStep === 1) advanceTour(1);
+                }} style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer' }} className={`hover-lift ${isFeatureTourActive && tourStep === 1 ? 'tour-target' : ''}`}>Cancel</button><button type="submit" className="btn-primary hover-lift">Create Task</button></div>
               </form>
             )}
 
@@ -1322,8 +1504,11 @@ function App() {
                   )}
                   <div ref={plannerEndRef} />
                 </div>
-                <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border-color)', background: 'var(--bg-secondary)', borderBottomLeftRadius: '16px', borderBottomRightRadius: '16px' }}>
-                  <input type="text" value={plannerInput} onChange={e => setPlannerInput(e.target.value)} onKeyDown={handlePlannerSubmit} placeholder="Describe your task..." style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--accent-primary)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }} disabled={isPlanning} />
+                <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border-color)', background: 'var(--bg-secondary)', borderBottomLeftRadius: '16px', borderBottomRightRadius: '16px', display: 'flex', gap: '8px' }}>
+                  <button type="button" onClick={() => toggleListening(plannerInput, setPlannerInput)} title="Voice Input" style={{ background: isListening ? 'var(--priority-critical)' : 'var(--bg-primary)', border: '1px solid var(--accent-primary)', color: isListening ? '#fff' : 'var(--text-secondary)', borderRadius: '50%', width: '48px', height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s ease', animation: isListening ? 'micPulse 1.5s infinite' : 'none', flexShrink: 0 }}>
+                    🎤
+                  </button>
+                  <input type="text" value={plannerInput} onChange={e => setPlannerInput(e.target.value)} onKeyDown={handlePlannerSubmit} placeholder="Describe your task..." style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid var(--accent-primary)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }} disabled={isPlanning} />
                 </div>
               </div>
             )}
@@ -1484,7 +1669,69 @@ function App() {
           </div>
         </div>
       )}
-      <style>{`@keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }`}</style>
+      {isFeatureTourActive && (
+        <svg id="tour-svg-layer" style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 9998, pointerEvents: 'none' }}>
+          <path id="tour-line-path" fill="none" stroke="var(--accent-primary)" strokeWidth="3" strokeDasharray="8 8" style={{ animation: 'dashLine 10s linear infinite' }} />
+          <circle id="tour-line-arrow" r="8" fill="var(--accent-primary)" />
+        </svg>
+      )}
+      {isFeatureTourActive && (
+        <div className="tour-overlay" style={{ position: 'fixed', bottom: '32px', right: '32px', zIndex: 9999, pointerEvents: 'none' }}>
+          <div id="tour-modal-box" className="glass-panel animate-fade-in" style={{ width: '380px', padding: '24px', background: 'var(--bg-secondary)', border: '2px solid var(--accent-primary)', pointerEvents: 'auto', boxShadow: '0 20px 40px rgba(0,0,0,0.5)', borderRadius: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--accent-primary)', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                Guided Tour: Step {tourStep + 1} of {TOUR_STEPS.length}
+              </span>
+            </div>
+            <h2 style={{ margin: '0 0 8px 0', fontSize: '1.2rem', color: 'var(--text-primary)' }}>
+              {TOUR_STEPS[tourStep].title}
+            </h2>
+            <p style={{ color: 'var(--text-secondary)', lineHeight: '1.5', fontSize: '0.95rem', marginBottom: '20px' }}>
+              {TOUR_STEPS[tourStep].description}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+              <button 
+                onClick={() => {
+                  setIsFeatureTourActive(false);
+                  localStorage.setItem(`hasCompletedFeatureTour_${auth.currentUser?.uid}`, 'true');
+                }} 
+                style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', padding: '6px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.85rem' }}
+                className="hover-lift"
+              >
+                Skip Tour
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
+        @keyframes dashLine { to { stroke-dashoffset: -200; } }
+        
+        ${isFeatureTourActive ? `
+        .app-container * {
+          pointer-events: none !important;
+        }
+        .tour-overlay, .tour-overlay * {
+          pointer-events: auto !important;
+        }
+        .tour-target, .tour-target * {
+          pointer-events: auto !important;
+        }
+        .tour-target {
+          position: relative;
+          z-index: 10000 !important;
+          box-shadow: 0 0 0 4px var(--accent-primary) !important;
+          animation: pulse-ring 2s infinite;
+        }
+        @keyframes pulse-ring {
+          0% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.7); }
+          70% { box-shadow: 0 0 0 10px rgba(139, 92, 246, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
+        }
+        ` : ''}
+      `}</style>
     </div>
   );
 }
