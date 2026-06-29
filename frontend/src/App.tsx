@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
-import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged } from './firebase';
+import { auth, googleProvider, githubProvider, signInWithPopup, signOut, onAuthStateChanged } from './firebase';
 import type { User } from 'firebase/auth';
 import { CustomCursor } from './CustomCursor';
 import type { CursorStyle } from './CustomCursor';
@@ -235,11 +235,12 @@ function App() {
     return () => { window.fetch = originalFetch; };
   }, []);
 
-  const handleLogin = async () => {
+  const handleLogin = async (provider: any) => {
     try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (error) {
+      await signInWithPopup(auth, provider);
+    } catch (error: any) {
       console.error("Login failed", error);
+      alert("Login Error: " + (error.message || "Authentication failed. Check your Firebase Provider settings."));
     }
   };
 
@@ -601,9 +602,14 @@ function App() {
           </div>
           <h1 style={{ fontSize: '1.8rem', marginBottom: '8px' }}>Trackly AI</h1>
           <p style={{ color: 'var(--text-secondary)', marginBottom: '32px' }}>Your AI Execution Operating System</p>
-          <button onClick={handleLogin} className="btn-primary hover-lift" style={{ width: '100%', padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
-            Continue with Google
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <button onClick={() => handleLogin(googleProvider)} className="btn-primary hover-lift" style={{ width: '100%', padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', background: '#fff', color: '#000' }}>
+              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" style={{ width: '20px' }} /> Continue with Google
+            </button>
+            <button onClick={() => handleLogin(githubProvider)} className="btn-primary hover-lift" style={{ width: '100%', padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', background: '#333', color: '#fff', border: '1px solid #555' }}>
+              <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GitHub" style={{ width: '20px', filter: 'invert(1)' }} /> Continue with GitHub
+            </button>
+          </div>
         </div>
       </div>
     );
