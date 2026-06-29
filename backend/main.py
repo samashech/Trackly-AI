@@ -435,6 +435,107 @@ def interrogation_chat(req: PlannerChatRequest):
         print(f"Ollama Chat Error: {e}")
         return {"reply": "I'm having trouble connecting to the local brain. Ensure Ollama is running."}
 
+class UploadSchedulePayload(BaseModel):
+    image_base64: str
+
+@app.post("/api/upload_schedule")
+def upload_schedule(payload: UploadSchedulePayload, user_id: str = Depends(get_user_id)):
+    b64_data = payload.image_base64
+    is_pdf = "application/pdf" in b64_data
+    if "base64," in b64_data:
+        b64_data = b64_data.split("base64,")[1]
+    
+    try:
+        schedule_text = ""
+        if is_pdf:
+            import base64
+            import io
+            from pypdf import PdfReader
+            pdf_bytes = base64.b64decode(b64_data)
+            reader = PdfReader(io.BytesIO(pdf_bytes))
+            for page in reader.pages:
+                text = page.extract_text()
+                if text: schedule_text += text + "\n"
+        else:
+            # Step 1: Moondream OCR
+            vision_response = ollama.generate(
+                model='moondream',
+                prompt="Read this entire schedule/timetable and extract all the text, events, and dates exactly as they appear.",
+                images=[b64_data]
+            )
+            schedule_text = vision_response['response'].strip()
+        
+        # Step 2: Stheno logic
+        current_time = datetime.now().isoformat()
+        judge_prompt = f"""
+        You are a strict, highly intelligent AI Task Planner. The user uploaded a schedule.
+        Here is the text extracted from the schedule: 
+        {schedule_text}
+        
+        The current date and time is: {current_time}.
+        
+        Your job is to reverse-engineer this schedule and generate a list of preparation tasks leading up to the events. 
+        For example, if there is a Biology Exam on July 24th, create a task to "Study for Biology Exam" due on July 23rd.
+        If there is a Meeting tomorrow, create a task to "Prepare Meeting Agenda" due 2 hours before the meeting.
+        
+        Rules:
+        - Identify 1 to 5 most important events from the schedule.
+        - For each event, create exactly 1 preparation task.
+        - The `due_date` MUST be in strict ISO format and MUST be before the event's actual time.
+        - `priority` must be "critical", "high", "medium", or "low".
+        - `estimated_hours` should be a reasonable float (e.g. 2.0).
+        - `blocked_sites` should be ["youtube.com", "instagram.com"].
+        
+        You MUST output ONLY a valid JSON array of task objects, and NOTHING else. No markdown backticks, no explanations. Just raw JSON array like this:
+        [
+          {{
+            "title": "Study for Biology Exam",
+            "estimated_hours": 3.0,
+            "priority": "critical",
+            "due_date": "2026-07-23T18:00:00",
+            "blocked_sites": ["youtube.com", "instagram.com"]
+          }}
+        ]
+        """
+        
+        judge_response = ollama.chat(
+            model="fluffy/l3-8b-stheno-v3.2:q4_k_m",
+            messages=[{"role": "user", "content": judge_prompt}]
+        )
+        resp_text = judge_response['message']['content'].strip()
+        
+        if "```json" in resp_text:
+            resp_text = resp_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in resp_text:
+            resp_text = resp_text.replace("```", "").strip()
+            
+        tasks_data = json.loads(resp_text)
+        
+        if user_id not in DB['tasks']: DB['tasks'][user_id] = []
+        created_tasks = []
+        import uuid
+        for td in tasks_data:
+            new_task = {
+                "id": str(uuid.uuid4())[:8],
+                "title": td.get("title", "Prep Task"),
+                "description": None,
+                "due_date": td.get("due_date", current_time),
+                "estimated_hours": float(td.get("estimated_hours", 1.0)),
+                "status": "pending",
+                "priority": td.get("priority", "high"),
+                "blocked_sites": td.get("blocked_sites", ["youtube.com"]),
+                "created_at": current_time,
+                "completed_at": None
+            }
+            DB['tasks'][user_id].append(new_task)
+            created_tasks.append(new_task)
+            
+        save_db(DB)
+        return {"status": "success", "tasks_created": len(created_tasks), "tasks": created_tasks}
+    except Exception as e:
+        print(f"Schedule Parse Error: {e}")
+        return {"error": str(e)}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

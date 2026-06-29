@@ -139,7 +139,8 @@ function App() {
   const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState<any>(null);
   const [selectedTask, setSelectedTask] = useState<TaskWithRisk | null>(null);
-  const [modalTab, setModalTab] = useState<'manual' | 'ai'>('manual');
+  const [modalTab, setModalTab] = useState<'manual' | 'ai' | 'upload'>('manual');
+  const [isUploadingSchedule, setIsUploadingSchedule] = useState(false);
   
   // Manual Form State
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -1284,7 +1285,8 @@ function App() {
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button onClick={() => setModalTab('manual')} style={{ padding: '8px 16px', background: 'none', border: 'none', cursor: 'pointer', borderBottom: modalTab === 'manual' ? '2px solid var(--accent-primary)' : '2px solid transparent', color: modalTab === 'manual' ? 'var(--text-primary)' : 'var(--text-secondary)' }}>Manual Entry</button>
-                <button onClick={() => setModalTab('ai')} style={{ padding: '8px 16px', background: 'none', border: 'none', cursor: 'pointer', borderBottom: modalTab === 'ai' ? '2px solid var(--accent-primary)' : '2px solid transparent', color: modalTab === 'ai' ? 'var(--text-primary)' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>✨ AI Task Planner</button>
+                <button onClick={() => setModalTab('ai')} style={{ padding: '8px 16px', background: 'none', border: 'none', cursor: 'pointer', borderBottom: modalTab === 'ai' ? '2px solid var(--accent-primary)' : '2px solid transparent', color: modalTab === 'ai' ? 'var(--text-primary)' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>✨ AI Planner</button>
+                <button onClick={() => setModalTab('upload')} style={{ padding: '8px 16px', background: 'none', border: 'none', cursor: 'pointer', borderBottom: modalTab === 'upload' ? '2px solid var(--accent-primary)' : '2px solid transparent', color: modalTab === 'upload' ? 'var(--text-primary)' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>📄 Upload Schedule</button>
               </div>
             </div>
 
@@ -1316,6 +1318,54 @@ function App() {
                 </div>
                 <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border-color)', background: 'var(--bg-secondary)', borderBottomLeftRadius: '16px', borderBottomRightRadius: '16px' }}>
                   <input type="text" value={plannerInput} onChange={e => setPlannerInput(e.target.value)} onKeyDown={handlePlannerSubmit} placeholder="Describe your task..." style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--accent-primary)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }} disabled={isPlanning} />
+                </div>
+              </div>
+            )}
+
+            {modalTab === 'upload' && (
+              <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'center' }}>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>Upload a picture of your exam schedule, meeting agenda, or syllabus. Trackly will automatically extract the events and generate preparation tasks leading up to them.</p>
+                <div style={{ background: 'var(--bg-primary)', border: '2px dashed var(--border-color)', borderRadius: '12px', padding: '40px 20px', minHeight: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {isUploadingSchedule ? (
+                    <div style={{ color: 'var(--accent-primary)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                      <span style={{ animation: 'pulse 1.5s infinite', fontSize: '24px' }}>⚙️</span>
+                      <span>AI is reverse-engineering your schedule...</span>
+                    </div>
+                  ) : (
+                    <input 
+                      type="file" 
+                      accept="image/*,application/pdf"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setIsUploadingSchedule(true);
+                        const reader = new FileReader();
+                        reader.onloadend = async () => {
+                          const base64data = reader.result;
+                          try {
+                            const res = await fetch('http://localhost:8000/api/upload_schedule', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json', 'X-User-Id': auth.currentUser?.uid || 'default' },
+                              body: JSON.stringify({ image_base64: base64data })
+                            });
+                            if (res.ok) {
+                              setShowModal(false);
+                              fetchTasksAndAnalyze();
+                            } else {
+                              alert("Failed to parse schedule.");
+                            }
+                          } catch (err) {
+                            console.error(err);
+                            alert("Failed to connect to AI server.");
+                          } finally {
+                            setIsUploadingSchedule(false);
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                      style={{ color: 'var(--text-secondary)' }}
+                    />
+                  )}
                 </div>
               </div>
             )}
