@@ -209,12 +209,28 @@ function App() {
   }, [animationsEnabled]);
 
   useEffect(() => {
-    if (cursorStyle !== 'none') {
+    if (user && cursorStyle !== 'none') {
       document.body.classList.add('custom-cursor-active');
     } else {
       document.body.classList.remove('custom-cursor-active');
     }
-  }, [cursorStyle]);
+  }, [cursorStyle, user]);
+
+  // Intercept all API calls to attach the current user's UID
+  useEffect(() => {
+    const originalFetch = window.fetch;
+    window.fetch = async (input, init) => {
+      if (typeof input === 'string' && input.includes('localhost:8000') && auth.currentUser) {
+        init = init || {};
+        init.headers = {
+          ...init.headers,
+          'X-User-Id': auth.currentUser.uid
+        };
+      }
+      return originalFetch(input, init);
+    };
+    return () => { window.fetch = originalFetch; };
+  }, []);
 
   const handleLogin = async () => {
     try {
@@ -246,7 +262,7 @@ function App() {
       setTasks(initialTasks);
       setLoading(false);
 
-      if (initialTasks.length === 0 && !localStorage.getItem('hasCompletedOnboarding')) {
+      if (initialTasks.length === 0 && !localStorage.getItem(`hasCompletedOnboarding_${auth.currentUser?.uid}`)) {
         setIsOnboarding(true);
       }
 
@@ -610,7 +626,7 @@ function App() {
                     });
                   }
                   
-                  localStorage.setItem('hasCompletedOnboarding', 'true');
+                  localStorage.setItem(`hasCompletedOnboarding_${user?.uid}`, 'true');
                   setIsOnboarding(false);
                   fetchTasksAndAnalyze();
                 } catch (err) {
@@ -633,7 +649,7 @@ function App() {
           
           <div style={{ marginTop: '24px' }}>
             <button onClick={() => {
-              localStorage.setItem('hasCompletedOnboarding', 'true');
+              localStorage.setItem(`hasCompletedOnboarding_${user?.uid}`, 'true');
               setIsOnboarding(false);
             }} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', textDecoration: 'underline', cursor: 'pointer' }}>
               Skip Tour
@@ -800,7 +816,9 @@ function App() {
                 for (const h of habits) await fetch(`http://localhost:8000/api/habits/${h.id}`, { method: 'DELETE' });
                 setTasks([]);
                 setHabits([]);
+                if (user?.uid) localStorage.removeItem(`hasCompletedOnboarding_${user.uid}`);
                 alert('All data wiped.');
+                window.location.reload();
               }
             }} style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--priority-critical)', border: '1px solid var(--priority-critical)', padding: '12px 24px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
               ⚠️ Nuke All Data

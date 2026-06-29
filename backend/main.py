@@ -1,10 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 import ollama
 import json
+import os
 
 app = FastAPI(title="Deadline Guardian AI API")
 
@@ -37,18 +38,39 @@ class Habit(BaseModel):
     tracked_domains: List[str] = []
     requires_proof: bool = False
 
-MOCK_TASKS = []
+
+DB_FILE = "actionmate_db.json"
+def load_db():
+    try:
+        with open(DB_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {"tasks": {}, "habits": {}, "usage": {}}
+
+def save_db(db):
+    with open(DB_FILE, "w") as f:
+        json.dump(db, f)
+
+DB = load_db()
+ACTIVE_USER_ID = "default"
+
+def get_user_id(x_user_id: Optional[str] = Header(None)):
+    global ACTIVE_USER_ID
+    if x_user_id:
+        ACTIVE_USER_ID = x_user_id
+    return ACTIVE_USER_ID
+
 
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the Deadline Guardian AI API"}
 
 @app.get("/api/tasks")
-def get_tasks():
+def get_tasks(user_id: str = Depends(get_user_id)):
     global MOCK_TASKS
     now = datetime.now()
     valid_tasks = []
-    for t in MOCK_TASKS:
+    for t in DB['tasks'].get(user_id, []):
         if t.get("status") == "completed" and t.get("completed_at"):
             completed_date = datetime.fromisoformat(t["completed_at"])
             if (now - completed_date).days > 7:
@@ -77,7 +99,7 @@ def create_task(task: Task):
 
 @app.put("/api/tasks/{task_id}")
 def update_task_status(task_id: str, payload: dict):
-    for t in MOCK_TASKS:
+    for t in DB['tasks'].get(user_id, []):
         if t["id"] == task_id:
             old_status = t.get("status")
             t["status"] = payload.get("status", t["status"])
@@ -90,69 +112,75 @@ def update_task_status(task_id: str, payload: dict):
                 t["due_date"] = payload["due_date"]
             if "estimated_hours" in payload:
                 t["estimated_hours"] = payload["estimated_hours"]
+            save_db(DB)
             return t
     return {"error": "not found"}
 
-MOCK_HABITS = []
-MOCK_USAGE = {} # domain -> seconds today
+
 
 class UsagePayload(BaseModel):
     domain: str
     seconds: int
 
 @app.post("/api/usage")
-def report_usage(payload: UsagePayload):
-    global MOCK_USAGE
-    MOCK_USAGE[payload.domain] = MOCK_USAGE.get(payload.domain, 0) + payload.seconds
+def report_usage(payload: UsagePayload, user_id: str = Depends(get_user_id)):
+    if user_id not in DB['usage']: DB['usage'][user_id] = {}
+    DB['usage'][user_id][payload.domain] = DB['usage'][user_id].get(payload.domain, 0) + payload.seconds
+    save_db(DB)
     return {"status": "ok"}
 
 @app.get("/api/usage")
-def get_usage():
-    return MOCK_USAGE
+def get_usage(user_id: str = Depends(get_user_id)):
+    return DB['usage'].get(user_id, {})
 
 @app.get("/api/habits")
-def get_habits():
-    return MOCK_HABITS
+def get_habits(user_id: str = Depends(get_user_id)):
+    return DB['habits'].get(user_id, [])
 
 @app.post("/api/habits")
-def create_habit(habit: Habit):
+def create_habit(habit: Habit, user_id: str = Depends(get_user_id)):
     new_h = habit.dict()
-    MOCK_HABITS.append(new_h)
+    if user_id not in DB['habits']: DB['habits'][user_id] = []
+    DB['habits'][user_id].append(new_h)
+    save_db(DB)
     return new_h
 
 @app.put("/api/habits/{habit_id}/toggle")
-def toggle_habit(habit_id: str):
-    for h in MOCK_HABITS:
+def toggle_habit(habit_id: str, user_id: str = Depends(get_user_id)):
+    for h in DB['habits'].get(user_id, []):
         if h["id"] == habit_id:
             h["completed_today"] = not h["completed_today"]
             if h["completed_today"]:
                 h["streak"] += 1
             else:
                 h["streak"] = max(0, h["streak"] - 1)
+            save_db(DB)
             return h
     return {"error": "not found"}
 
 @app.put("/api/habits/{habit_id}")
-def update_habit(habit_id: str, payload: dict):
-    for h in MOCK_HABITS:
+def update_habit(habit_id: str, payload: dict, user_id: str = Depends(get_user_id)):
+    for h in DB['habits'].get(user_id, []):
         if h["id"] == habit_id:
             if "title" in payload:
                 h["title"] = payload["title"]
+            save_db(DB)
             return h
     return {"error": "not found"}
 
 @app.delete("/api/habits/{habit_id}")
-def delete_habit(habit_id: str):
-    global MOCK_HABITS
-    MOCK_HABITS = [h for h in MOCK_HABITS if h["id"] != habit_id]
+def delete_habit(habit_id: str, user_id: str = Depends(get_user_id)):
+    if user_id in DB['habits']:
+        DB['habits'][user_id] = [h for h in DB['habits'][user_id] if h["id"] != habit_id]
+    save_db(DB)
     return {"status": "deleted"}
 
 class VerifyPayload(BaseModel):
     image_base64: str
 
 @app.post("/api/habits/{habit_id}/verify")
-def verify_habit(habit_id: str, payload: VerifyPayload):
-    target_habit = next((h for h in MOCK_HABITS if h["id"] == habit_id), None)
+def verify_habit(habit_id: str, payload: VerifyPayload, user_id: str = Depends(get_user_id)):
+    target_habit = next((h for h in DB['habits'].get(user_id, []) if h["id"] == habit_id), None)
     if not target_habit:
         return {"error": "not found"}
 
@@ -188,7 +216,7 @@ def verify_habit(habit_id: str, payload: VerifyPayload):
         if result.get("verified"):
             target_habit["completed_today"] = True
             target_habit["streak"] += 1
-            
+            save_db(DB)
         return result
     except Exception as e:
         return {"verified": False, "sassy_reason": f"AI Verification failed: {str(e)}"}
