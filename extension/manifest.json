@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "ActionMate AI Enforcer",
+  "name": "Trackly AI Enforcer",
   "version": "1.0",
-  "description": "Silently blocks distracting websites when you have an overdue task on your ActionMate dashboard.",
+  "description": "Silently blocks distracting websites when you have an overdue task on your Trackly dashboard.",
   "permissions": [
     "tabs",
     "scripting"

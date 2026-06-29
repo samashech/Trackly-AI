@@ -244,7 +244,7 @@ def onboarding_generate(req: OnboardingRequest):
     prompt = f"""
     Current Date and Time: {now_iso}
     
-    You are an AI onboarding assistant for ActionMate. A new user just joined and stated their primary mission: "{req.user_mission}".
+    You are an AI onboarding assistant for Trackly. A new user just joined and stated their primary mission: "{req.user_mission}".
     Generate a "Starter Pack" of exactly 3 realistic, specific tasks to help them get started right now.
     
     You MUST output ONLY a raw JSON array of objects. Do NOT use markdown code blocks like ```json.

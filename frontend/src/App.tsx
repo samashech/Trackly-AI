@@ -99,6 +99,7 @@ function App() {
   const [usageStats, setUsageStats] = useState<Record<string, number>>({});
   const [cursorStyle, setCursorStyle] = useState<CursorStyle>((localStorage.getItem('cursorStyle') as CursorStyle) || 'none');
   const [aiPersonality, setAiPersonality] = useState(localStorage.getItem('aiPersonality') || 'Aggressive Execution Coach');
+  const [aiTutorName, setAiTutorName] = useState(localStorage.getItem('aiTutorName') || 'Troy');
   const [animationsEnabled, setAnimationsEnabled] = useState(localStorage.getItem('animationsEnabled') !== 'false');
   const [warningTime, setWarningTime] = useState(Number(localStorage.getItem('warningTime')) || 15);
   const [globalBlocklist, setGlobalBlocklist] = useState(localStorage.getItem('globalBlocklist') || '');
@@ -587,7 +588,7 @@ function App() {
   };
 
   if (authLoading) {
-    return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>Loading ActionMate AI...</div>;
+    return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>Loading Trackly AI...</div>;
   }
 
   if (!user) {
@@ -595,7 +596,7 @@ function App() {
       <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
         <div className="glass-panel" style={{ padding: '40px', width: '400px', textAlign: 'center', background: 'var(--bg-secondary)' }}>
           <div style={{ margin: '0 auto 24px', width: '48px', height: '48px', borderRadius: '12px', background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))' }}></div>
-          <h1 style={{ fontSize: '1.8rem', marginBottom: '8px' }}>ActionMate AI</h1>
+          <h1 style={{ fontSize: '1.8rem', marginBottom: '8px' }}>Trackly AI</h1>
           <p style={{ color: 'var(--text-secondary)', marginBottom: '32px' }}>Your AI Execution Operating System</p>
           <button onClick={handleLogin} className="btn-primary hover-lift" style={{ width: '100%', padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
             Continue with Google
@@ -610,7 +611,7 @@ function App() {
       <div style={{ height: '100vh', width: '100vw', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)', color: 'var(--text-primary)', flexDirection: 'column' }}>
         <div className="glass-panel animate-fade-in" style={{ width: '600px', padding: '48px', textAlign: 'center', background: 'var(--bg-secondary)', border: '1px solid var(--accent-primary)' }}>
           <div style={{ margin: '0 auto 24px', width: '64px', height: '64px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px' }}>🎯</div>
-          <h1 style={{ fontSize: '2rem', marginBottom: '16px' }}>Welcome to ActionMate AI.</h1>
+          <h1 style={{ fontSize: '2rem', marginBottom: '16px' }}>Welcome to Trackly AI.</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem', marginBottom: '32px', lineHeight: 1.6 }}>
             I am your personal AI execution coach. Before we begin, what is your primary mission right now? <br/><br/>
             <em>(e.g., "I am a student studying for finals", or "I am building a tech startup")</em>
@@ -799,10 +800,23 @@ function App() {
           </div>
 
           <div style={{ marginBottom: '32px' }}>
-            <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '16px' }}>AI Tutor</h3>
+            <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '16px' }}>{aiTutorName} (AI Tutor)</h3>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>Tutor Name</label>
+              <input type="text" value={aiTutorName} onChange={e => { setAiTutorName(e.target.value); localStorage.setItem('aiTutorName', e.target.value); }} style={{ width: '100%', maxWidth: '300px', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }} />
+            </div>
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: 600 }}>AI Personality</label>
-              <select value={aiPersonality} onChange={e => { setAiPersonality(e.target.value); localStorage.setItem('aiPersonality', e.target.value); }} style={{ width: '100%', maxWidth: '300px', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+              <select value={aiPersonality} onChange={e => { 
+                const newP = e.target.value;
+                setAiPersonality(newP); 
+                localStorage.setItem('aiPersonality', newP); 
+                let dName = 'Troy';
+                if(newP === 'Gentle Supportive Coach') dName = 'Timothy';
+                if(newP === 'Analytical Strategist') dName = 'Tracy';
+                setAiTutorName(dName);
+                localStorage.setItem('aiTutorName', dName);
+              }} style={{ width: '100%', maxWidth: '300px', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
                 <option value="Aggressive Execution Coach">Aggressive Execution Coach (Drill Sergeant)</option>
                 <option value="Gentle Supportive Coach">Gentle Supportive Coach</option>
                 <option value="Analytical Strategist">Analytical Strategist</option>
@@ -926,7 +940,7 @@ function App() {
                         setActiveTab('ai tutor');
                         setChatInput(`I need guidance on my task: "${task.title}". Can you break it down or help me start?`);
                       }} className="hover-lift" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--accent-primary)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        🤖 Ask AI Tutor
+                        🤖 Ask {aiTutorName}
                       </button>
                     </p>
                   </div>
@@ -1098,7 +1112,7 @@ function App() {
         <div className="glass-panel animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 160px)' }}>
           <div style={{ padding: '24px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: 'var(--priority-low)', boxShadow: '0 0 8px var(--priority-low)' }}></div>
-            <h2 style={{ margin: 0 }}>Execution Tutor</h2>
+            <h2 style={{ margin: 0 }}>{aiTutorName}</h2>
           </div>
           <div style={{ flex: 1, padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {criticalTask && criticalTask.riskAnalysis && (
@@ -1170,7 +1184,7 @@ function App() {
           {!isSidebarCollapsed && (
             <>
               <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))' }}></div>
-              <h2 style={{ fontSize: '1.2rem', margin: 0, whiteSpace: 'nowrap' }}>ActionMate</h2>
+              <h2 style={{ fontSize: '1.2rem', margin: 0, whiteSpace: 'nowrap' }}>Trackly</h2>
             </>
           )}
         </div>
@@ -1184,7 +1198,7 @@ function App() {
               title={tab}
             >
               <span className="sidebar-icon" style={{ fontSize: '1.2rem', display: 'inline-block', width: '24px', textAlign: 'center' }}>{TAB_ICONS[tab]}</span>
-              {!isSidebarCollapsed && <span className="sidebar-text" style={{ marginLeft: '12px' }}>{tab}</span>}
+              {!isSidebarCollapsed && <span className="sidebar-text" style={{ marginLeft: '12px' }}>{tab === 'AI Tutor' ? aiTutorName : tab}</span>}
             </button>
           ))}
         </nav>

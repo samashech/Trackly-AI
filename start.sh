@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🚀 Booting up ActionMate AI..."
+echo "🚀 Booting up Trackly AI..."
 
 # 1. Start the Python Backend
 echo "-> Starting FastAPI Backend (Port 8000)..."

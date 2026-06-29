@@ -1,8 +1,8 @@
 // Function to inject the permanent critical task widget
 function injectCriticalWidget(taskTitles) {
-  if (document.getElementById('actionmate-critical-widget')) return;
+  if (document.getElementById('trackly-critical-widget')) return;
   const widget = document.createElement('div');
-  widget.id = 'actionmate-critical-widget';
+  widget.id = 'trackly-critical-widget';
   widget.style.position = 'fixed';
   widget.style.bottom = '20px';
   widget.style.left = '20px';
@@ -53,9 +53,9 @@ function injectCriticalWidget(taskTitles) {
 
 // Function to inject the banner directly into the webpage
 function injectWarningBanner(taskTitle, minsLeft) {
-  if (document.getElementById('actionmate-warning')) return; // Already injected
+  if (document.getElementById('trackly-warning')) return; // Already injected
   const banner = document.createElement('div');
-  banner.id = 'actionmate-warning';
+  banner.id = 'trackly-warning';
   banner.style.position = 'fixed';
   banner.style.top = '0';
   banner.style.left = '0';
@@ -70,7 +70,7 @@ function injectWarningBanner(taskTitle, minsLeft) {
   banner.style.boxShadow = '0 10px 15px rgba(0,0,0,0.5)';
   banner.style.fontFamily = 'system-ui, sans-serif';
   banner.style.animation = 'pulse 2s infinite'; // Requires the site to have a pulse animation, but it's fine
-  banner.innerText = `⚠️ ActionMate Warning: You have ${Math.ceil(minsLeft)} minutes left to finish "${taskTitle}" before Nuclear Lockdown. Get to work!`;
+  banner.innerText = `⚠️ Trackly Warning: You have ${Math.ceil(minsLeft)} minutes left to finish "${taskTitle}" before Nuclear Lockdown. Get to work!`;
   document.body.appendChild(banner);
   
   // Flash it a few times and disappear after 10 seconds so it doesn't break the site completely
@@ -134,14 +134,14 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       
       // 1. Is the user trying to visit an overdue domain?
       if (states.overdueDomains.some(d => domain.includes(d))) {
-        console.log(`ActionMate Enforcer: Blocked access to ${domain}! Redirecting to dashboard.`);
+        console.log(`Trackly Enforcer: Blocked access to ${domain}! Redirecting to dashboard.`);
         chrome.tabs.update(tabId, { url: "http://localhost:5173" });
       } 
       // 2. Is the user visiting a domain they are tracking with < 15 mins left?
       else {
         for (const w of states.warningTasks) {
           if (w.domains.some(d => domain.includes(d))) {
-            console.log(`ActionMate Enforcer: Firing warning shot on ${domain} for task "${w.title}"`);
+            console.log(`Trackly Enforcer: Firing warning shot on ${domain} for task "${w.title}"`);
             // Inject the warning banner into the page
             chrome.scripting.executeScript({
               target: { tabId: tabId },
