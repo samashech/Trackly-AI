@@ -67,21 +67,20 @@ def read_root():
 
 @app.get("/api/tasks")
 def get_tasks(user_id: str = Depends(get_user_id)):
-    global MOCK_TASKS
     now = datetime.now()
     valid_tasks = []
     for t in DB['tasks'].get(user_id, []):
         if t.get("status") == "completed" and t.get("completed_at"):
             completed_date = datetime.fromisoformat(t["completed_at"])
             if (now - completed_date).days > 7:
-                continue # Auto-cleanup: remove if older than 7 days
+                continue # Auto-cleanup
         valid_tasks.append(t)
-    MOCK_TASKS = valid_tasks
-    return MOCK_TASKS
+    DB['tasks'][user_id] = valid_tasks
+    save_db(DB)
+    return valid_tasks
 
 @app.post("/api/tasks", response_model=Task)
-def create_task(task: Task):
-    # For now, append to our in-memory list
+def create_task(task: Task, user_id: str = Depends(get_user_id)):
     new_task = {
         "id": task.id,
         "title": task.title,
@@ -94,7 +93,9 @@ def create_task(task: Task):
         "created_at": task.created_at or datetime.now().isoformat(),
         "completed_at": None
     }
-    MOCK_TASKS.append(new_task)
+    if user_id not in DB['tasks']: DB['tasks'][user_id] = []
+    DB['tasks'][user_id].append(new_task)
+    save_db(DB)
     return new_task
 
 @app.put("/api/tasks/{task_id}")
@@ -184,35 +185,38 @@ def verify_habit(habit_id: str, payload: VerifyPayload, user_id: str = Depends(g
     if not target_habit:
         return {"error": "not found"}
 
-    prompt = f"You are a strict judge. The user claims they completed the habit: '{target_habit['title']}'. Look at this photo. Does it prove they did it? (e.g. for waking up: a sunrise or coffee. for gym: gym equipment. for studying: a book or laptop). Reply ONLY with valid JSON: {{\"verified\": true, \"sassy_reason\": \"Good job\"}} or {{\"verified\": false, \"sassy_reason\": \"Nice try, this is just a wall.\"}}"
-    
     b64_data = payload.image_base64
     if "base64," in b64_data:
         b64_data = b64_data.split("base64,")[1]
 
     try:
-        response = ollama.generate(
+        # Step 1: The "Eyes" (Moondream describes the image)
+        vision_response = ollama.generate(
             model='moondream',
-            prompt=prompt,
+            prompt="Describe exactly what is happening in this image in detail.",
             images=[b64_data]
         )
-        resp_text = response['response'].strip()
+        image_description = vision_response['response'].strip()
         
-        # Try to parse JSON from Moondream's output
-        if "```json" in resp_text:
-            resp_text = resp_text.split("```json")[1].split("```")[0].strip()
-        elif "```" in resp_text:
-            resp_text = resp_text.replace("```", "").strip()
+        # Step 2: The "Judge" (Stheno evaluates the description)
+        judge_prompt = f"""
+        You are a strict AI judge. The user is trying to prove they completed the habit: "{target_habit['title']}".
+        Here is what the camera sees: {image_description}
+        
+        Did the user complete the habit based on this description? 
+        Answer strictly with the word YES or NO, followed by a one-sentence sassy explanation.
+        """
+        judge_response = ollama.chat(
+            model="fluffy/l3-8b-stheno-v3.2:q4_k_m",
+            messages=[{"role": "user", "content": judge_prompt}]
+        )
+        resp_text = judge_response['message']['content'].strip()
+        
+        if resp_text.upper().startswith("YES"):
+            result = {"verified": True, "sassy_reason": resp_text}
+        else:
+            result = {"verified": False, "sassy_reason": resp_text}
             
-        try:
-            result = json.loads(resp_text)
-        except json.JSONDecodeError:
-            # Fallback if moondream doesn't format JSON perfectly
-            if "true" in resp_text.lower() and "false" not in resp_text.lower():
-                result = {"verified": True, "sassy_reason": resp_text}
-            else:
-                result = {"verified": False, "sassy_reason": resp_text}
-        
         if result.get("verified"):
             target_habit["completed_today"] = True
             target_habit["streak"] += 1

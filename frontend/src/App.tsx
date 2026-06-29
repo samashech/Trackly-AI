@@ -209,12 +209,12 @@ function App() {
   }, [animationsEnabled]);
 
   useEffect(() => {
-    if (user && cursorStyle !== 'none') {
+    if (user && !isOnboarding && cursorStyle !== 'none') {
       document.body.classList.add('custom-cursor-active');
     } else {
       document.body.classList.remove('custom-cursor-active');
     }
-  }, [cursorStyle, user]);
+  }, [cursorStyle, user, isOnboarding]);
 
   // Intercept all API calls to attach the current user's UID
   useEffect(() => {
@@ -607,7 +607,8 @@ function App() {
                     body: JSON.stringify({ user_mission: onboardingInput.trim() })
                   });
                   const data = await res.json();
-                  const rawJson = data.tasks_json.replace(/```json/g, '').replace(/```/g, '').trim();
+                  const jsonMatch = data.tasks_json.match(/\[\s*\{[\s\S]*\}\s*\]/);
+                  const rawJson = jsonMatch ? jsonMatch[0] : data.tasks_json.replace(/```json/g, '').replace(/```/g, '').trim();
                   const generatedTasks = JSON.parse(rawJson);
                   
                   for (const t of generatedTasks) {
