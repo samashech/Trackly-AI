@@ -595,7 +595,9 @@ function App() {
     return (
       <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
         <div className="glass-panel" style={{ padding: '40px', width: '400px', textAlign: 'center', background: 'var(--bg-secondary)' }}>
-          <div style={{ margin: '0 auto 24px', width: '48px', height: '48px', borderRadius: '12px', background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))' }}></div>
+          <div style={{ margin: '0 auto 24px', width: '64px', height: '64px', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
+            <img src="/logo.jpeg" alt="Trackly Logo" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'left' }} />
+          </div>
           <h1 style={{ fontSize: '1.8rem', marginBottom: '8px' }}>Trackly AI</h1>
           <p style={{ color: 'var(--text-secondary)', marginBottom: '32px' }}>Your AI Execution Operating System</p>
           <button onClick={handleLogin} className="btn-primary hover-lift" style={{ width: '100%', padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
@@ -610,7 +612,9 @@ function App() {
     return (
       <div style={{ height: '100vh', width: '100vw', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)', color: 'var(--text-primary)', flexDirection: 'column' }}>
         <div className="glass-panel animate-fade-in" style={{ width: '600px', padding: '48px', textAlign: 'center', background: 'var(--bg-secondary)', border: '1px solid var(--accent-primary)' }}>
-          <div style={{ margin: '0 auto 24px', width: '64px', height: '64px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px' }}>🎯</div>
+          <div style={{ margin: '0 auto 24px', width: '80px', height: '80px', borderRadius: '50%', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
+            <img src="/logo.jpeg" alt="Trackly Logo" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'left' }} />
+          </div>
           <h1 style={{ fontSize: '2rem', marginBottom: '16px' }}>Welcome to Trackly AI.</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem', marginBottom: '32px', lineHeight: 1.6 }}>
             I am your personal AI execution coach. Before we begin, what is your primary mission right now? <br/><br/>
@@ -1183,7 +1187,9 @@ function App() {
           <button onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} className="hover-lift" style={{ background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '1.4rem', padding: '4px', display: 'flex' }} title="Toggle Sidebar">☰</button>
           {!isSidebarCollapsed && (
             <>
-              <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))' }}></div>
+              <div style={{ width: '32px', height: '32px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>
+                <img src="/logo.jpeg" alt="Trackly Logo" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'left' }} />
+              </div>
               <h2 style={{ fontSize: '1.2rem', margin: 0, whiteSpace: 'nowrap' }}>Trackly</h2>
             </>
           )}
