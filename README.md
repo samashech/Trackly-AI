@@ -1,58 +1,64 @@
-# ActionMate AI 🚀
+# Trackly 🚀
 
-ActionMate AI is a ruthless, autonomous productivity application designed for extreme procrastinators. 
+Trackly (formerly ActionMate AI) is a ruthless, autonomous productivity application designed for extreme procrastinators. 
+
+## 🏆 Gemini API Developer Competition Submission
+This project is powered entirely by **Google's Gemini 1.5 Flash** model, utilizing its lightning-fast multimodal reasoning capabilities to act as a task planner, an image-verifying habit judge, and a ruthless accountability coach.
+
+**🔗 Live Deployed Link:** [https://actionmate-ai-79bd2.web.app](https://actionmate-ai-79bd2.web.app)  
+*(Frontend hosted on Google Firebase, AI Backend hosted on Hugging Face Spaces)*
 
 ## 🚨 The Problem
 Traditional to-do lists are passive. They let you write down tasks and then happily sit back while you completely ignore them. When you miss a deadline, nothing happens. You feel a tiny pang of guilt, and then you open YouTube. The system enables your procrastination instead of fighting it.
 
 ## 💡 Our Solution
-ActionMate AI takes a hostile approach to productivity. It acts as an aggressive accountability partner with a built-in Chrome Extension "bodyguard". 
+Trackly takes a hostile approach to productivity. It acts as an aggressive accountability partner. 
 
 When you set a task, you assign a deadline and a list of websites you use to procrastinate (like `youtube.com` or `instagram.com`). If you miss that deadline, the entire system goes into **Nuclear Lockdown**:
 1. Your dashboard is hijacked, replaced by a flashing red alert.
-2. An AI Coach (powered locally by Ollama) interrogates you on why you failed.
-3. The Chrome Extension actively intercepts and blocks you from accessing your assigned distraction websites, forcefully redirecting you back to the interrogation screen.
+2. An **AI Coach** (powered by Gemini) interrogates you on why you failed, analyzing your excuses in real-time.
+3. A custom Chrome Extension actively intercepts and blocks you from accessing your assigned distraction websites, forcefully redirecting you back to the interrogation screen.
 4. The lockdown *only* ends when you successfully negotiate a new deadline with the AI.
 
-## ⚙️ How It Works
-The architecture consists of three integrated systems running entirely on your local machine for maximum speed and privacy:
-* **The Brain (Backend):** A Python **FastAPI** server that acts as our database and communicates with **Ollama** (a local AI model running `Llama 3`) to parse natural language into structured JSON tasks and run the interrogation chat.
+Additionally, Trackly features **Visual Habit Verification**. Instead of simply checking a box to say you "Read a book", you must upload a photo of the book. Gemini 1.5 Flash's multimodal vision capabilities instantly analyze the image to verify if you are actually performing the habit before giving you credit!
+
+## ⚙️ Architecture & Tech Stack
+* **The Brain (Backend):** A Python **FastAPI** server that communicates with the **Google Gemini API** (`gemini-1.5-flash-latest`) to parse natural language into structured JSON tasks, run the interrogation chat, and verify habit proof images.
 * **The Dashboard (Frontend):** A beautiful glassmorphism **React + Vite** web app where you manage your tasks, view your AI Risk Analysis, and chat with the AI Planner.
 * **The Enforcer (Chrome Extension):** A custom Google Chrome extension that quietly polls the backend. When a task goes overdue, it dynamically extracts the `blocked_sites` array for that specific task and instantly redirects your browser if you try to visit them.
 
-## 🔒 Privacy & Security (100% Local)
-**None of your personal data is stolen, tracked, or sent to the cloud.** 
-Because this application uses **Ollama** to run the Artificial Intelligence directly on your computer's own hardware, you do not need an internet connection to use the AI Planner or the AI Interrogation features. Your tasks, your browsing history, and your conversations with the AI never leave your local system.
-
 ---
 
-## 🚀 How to Run It on Your System
+## 🚀 How to Run It Locally (For Judges)
+
+While the app is deployed live, you can easily run it on your local machine to test the Chrome Extension feature.
 
 ### Prerequisites
-1. **Node.js & npm** (For the frontend)
-2. **Python 3.10+** (For the backend)
-3. **Ollama** (Installed locally and running the `Llama 3` model).
+1. **Node.js & npm**
+2. **Python 3.10+**
+3. **Gemini API Key** (from Google AI Studio)
 
-### Step 1: Install Dependencies
+### Step 1: Start the Backend
 Open a terminal in the project root:
 ```bash
-# Setup Backend
 cd backend
 python3 -m venv venv
-source venv/bin/activate
-pip install fastapi uvicorn pydantic ollama
+source venv/bin/activate  # On Windows use: venv\Scripts\activate
+pip install -r requirements.txt
 
-# Setup Frontend
-cd ../frontend
-npm install
+# Set your Gemini API key
+export GEMINI_API_KEY="your_api_key_here"
+
+# Start the server
+uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-### Step 2: Boot Up the Servers
-We have included a master startup script to easily boot both the Python and React servers in a single terminal.
+### Step 2: Start the Frontend
+In a new terminal:
 ```bash
-# From the root project directory:
-chmod +x start.sh
-./start.sh
+cd frontend
+npm install
+npm run dev
 ```
 The website will now be live at `http://localhost:5173`.
 

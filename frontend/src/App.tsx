@@ -370,7 +370,7 @@ function App() {
   useEffect(() => {
     const originalFetch = window.fetch;
     window.fetch = async (input, init) => {
-      if (typeof input === 'string' && input.includes('localhost:8000') && auth.currentUser) {
+      if (typeof input === 'string' && (input.includes('localhost:8000') || (import.meta.env.VITE_API_URL && input.includes(import.meta.env.VITE_API_URL))) && auth.currentUser) {
         init = init || {};
         init.headers = {
           ...init.headers,
@@ -403,7 +403,7 @@ function App() {
   async function fetchTasksAndAnalyze() {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/api/tasks');
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/tasks`);
       const data: Task[] = await response.json();
       
       const initialTasks = data.map(task => ({
@@ -423,7 +423,7 @@ function App() {
           return;
         }
         try {
-          const riskResponse = await fetch('http://localhost:8000/api/analyze_risk', {
+          const riskResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/analyze_risk`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(task)
@@ -443,7 +443,7 @@ function App() {
 
   async function fetchHabits() {
     try {
-      const response = await fetch('http://localhost:8000/api/habits');
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/habits`);
       const data = await response.json();
       setHabits(data);
     } catch (err) {
@@ -461,7 +461,7 @@ function App() {
         tracked_domains.push(domain);
       }
 
-      await fetch('http://localhost:8000/api/habits', {
+      await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/habits`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -489,7 +489,7 @@ function App() {
     }
     
     try {
-      await fetch(`http://localhost:8000/api/habits/${habit.id}/toggle`, {
+      await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/habits/${habit.id}/toggle`, {
         method: 'PUT'
       });
       fetchHabits();
@@ -500,7 +500,7 @@ function App() {
 
   const deleteHabitAPI = async (id: string) => {
     try {
-      await fetch(`http://localhost:8000/api/habits/${id}`, { method: 'DELETE' });
+      await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/habits/${id}`, { method: 'DELETE' });
       fetchHabits();
     } catch (err) {
       console.error("Failed to delete habit", err);
@@ -509,7 +509,7 @@ function App() {
 
   const updateHabitAPI = async (id: string, title: string) => {
     try {
-      await fetch(`http://localhost:8000/api/habits/${id}`, {
+      await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/habits/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title })
@@ -527,7 +527,7 @@ function App() {
       taskPayload.blocked_sites = Array.from(new Set([...(taskPayload.blocked_sites || []), ...globalSites]));
     }
     try {
-      await fetch('http://localhost:8000/api/tasks', {
+      await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(taskPayload)
@@ -549,7 +549,7 @@ function App() {
     e.preventDefault();
     if (!editingTask) return;
     try {
-      await fetch(`http://localhost:8000/api/tasks/${editingTask.id}`, {
+      await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/tasks/${editingTask.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -570,7 +570,7 @@ function App() {
   const updateTaskAPI = async (taskId: string, payload: Partial<Task>) => {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...payload } : t));
     try {
-      await fetch(`http://localhost:8000/api/tasks/${taskId}`, {
+      await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/tasks/${taskId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -615,7 +615,7 @@ function App() {
       setIsPlanning(true);
 
       try {
-        const response = await fetch('http://localhost:8000/api/planner_chat', {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/planner_chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ messages: newMessages })
@@ -665,7 +665,7 @@ function App() {
       setLockdownChat(newMessages);
       
       try {
-        const response = await fetch('http://localhost:8000/api/interrogation_chat', {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/interrogation_chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ messages: newMessages })
@@ -712,7 +712,7 @@ function App() {
       const tasksContext = tasks.filter(t => t.status !== 'completed').map(t => `[${t.priority.toUpperCase()}] ${t.title} (Risk: ${t.riskAnalysis?.risk_score}%, Due: ${t.due_date})`).join(' | ');
 
       try {
-        const response = await fetch('http://localhost:8000/api/chat', {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -783,7 +783,7 @@ function App() {
               if (e.key === 'Enter' && onboardingInput.trim() && !isGeneratingOnboarding) {
                 setIsGeneratingOnboarding(true);
                 try {
-                  const res = await fetch('http://localhost:8000/api/onboarding_generate', {
+                  const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/onboarding_generate`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ user_mission: onboardingInput.trim() })
@@ -794,7 +794,7 @@ function App() {
                   const generatedTasks = JSON.parse(rawJson);
                   
                   for (const t of generatedTasks) {
-                    await fetch('http://localhost:8000/api/tasks', {
+                    await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/tasks`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
@@ -1008,8 +1008,8 @@ function App() {
             <h3 style={{ borderBottom: '1px solid var(--priority-critical)', paddingBottom: '8px', marginBottom: '16px', color: 'var(--priority-critical)' }}>Danger Zone</h3>
             <button className="hover-lift" onClick={async () => {
               if (window.confirm('Are you absolutely sure? This will delete ALL tasks and habits forever.')) {
-                for (const t of tasks) await fetch(`http://localhost:8000/api/tasks/${t.id}`, { method: 'DELETE' });
-                for (const h of habits) await fetch(`http://localhost:8000/api/habits/${h.id}`, { method: 'DELETE' });
+                for (const t of tasks) await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/tasks/${t.id}`, { method: 'DELETE' });
+                for (const h of habits) await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/habits/${h.id}`, { method: 'DELETE' });
                 setTasks([]);
                 setHabits([]);
                 if (user?.uid) {
@@ -1189,7 +1189,7 @@ function App() {
                   <div style={{ flex: 1, cursor: 'pointer' }} onClick={async () => {
                     setSelectedHabit(habit);
                     try {
-                      const res = await fetch('http://localhost:8000/api/usage');
+                      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/usage`);
                       setUsageStats(await res.json());
                     } catch (e) { console.error(e); }
                   }}>
@@ -1534,7 +1534,7 @@ function App() {
                         reader.onloadend = async () => {
                           const base64data = reader.result;
                           try {
-                            const res = await fetch('http://localhost:8000/api/upload_schedule', {
+                            const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/upload_schedule`, {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json', 'X-User-Id': auth.currentUser?.uid || 'default' },
                               body: JSON.stringify({ image_base64: base64data })
@@ -1629,7 +1629,7 @@ function App() {
                   reader.onload = async (event) => {
                     const base64 = event.target?.result as string;
                     try {
-                      const res = await fetch(`http://localhost:8000/api/habits/${verifyingHabit.id}/verify`, {
+                      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/habits/${verifyingHabit.id}/verify`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ image_base64: base64 })
