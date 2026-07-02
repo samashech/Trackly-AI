@@ -168,13 +168,17 @@ function App() {
     }
   ];
 
+  const endTour = () => {
+    setIsFeatureTourActive(false);
+    localStorage.setItem(`hasCompletedFeatureTour_${auth.currentUser?.uid}`, 'true');
+  };
+
   const advanceTour = (stepCompleted: number) => {
     if (tourStep === stepCompleted) {
       if (tourStep < TOUR_STEPS.length - 1) {
         setTourStep(prev => prev + 1);
       } else {
-        setIsFeatureTourActive(false);
-        localStorage.setItem(`hasCompletedFeatureTour_${auth.currentUser?.uid}`, 'true');
+        endTour();
       }
     }
   };
@@ -763,6 +767,8 @@ function App() {
   }
 
   if (isOnboarding) {
+
+
     return (
       <div style={{ height: '100vh', width: '100vw', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)', color: 'var(--text-primary)', flexDirection: 'column' }}>
         <div className="glass-panel animate-fade-in" style={{ width: '600px', padding: '48px', textAlign: 'center', background: 'var(--bg-secondary)', border: '1px solid var(--accent-primary)' }}>
@@ -985,6 +991,8 @@ function App() {
               <input type="number" value={warningTime} onChange={e => { setWarningTime(Number(e.target.value)); localStorage.setItem('warningTime', e.target.value); }} style={{ width: '100%', maxWidth: '150px', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }} />
             </div>
           </div>
+
+
 
           <div style={{ marginBottom: '32px' }}>
             <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '16px' }}>Workflow & Data</h3>
@@ -1692,8 +1700,7 @@ function App() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
               <button 
                 onClick={() => {
-                  setIsFeatureTourActive(false);
-                  localStorage.setItem(`hasCompletedFeatureTour_${auth.currentUser?.uid}`, 'true');
+                  endTour();
                 }} 
                 style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', padding: '6px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.85rem' }}
                 className="hover-lift"

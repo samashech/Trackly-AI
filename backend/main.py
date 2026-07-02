@@ -13,10 +13,9 @@ app = FastAPI(title="Deadline Guardian AI API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], # In production, replace with frontend URL
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
-    allow_headers=["*"],
-)
+    allow_headers=["*"])
 
 class Task(BaseModel):
     id: str
@@ -201,10 +200,7 @@ def verify_habit(habit_id: str, payload: VerifyPayload, user_id: str = Depends(g
 
     try:
         # Step 1: The "Eyes" (Moondream describes the image)
-        vision_response = ollama.generate(
-            model='moondream',
-            prompt="Describe exactly what is happening in this image in detail.",
-            images=[b64_data]
+        vision_response = ollama.generate(model='moondream', prompt="Describe exactly what is happening in this image in detail.", images=[b64_data]
         )
         image_description = vision_response['response'].strip()
         
@@ -305,7 +301,7 @@ def analyze_risk(task: Task):
         print(f"Ollama Error: {e}")
         return {
             "risk_score": 50,
-            "recommendation": "Unable to connect to local Ollama instance. Please ensure Ollama is running and the model is pulled.",
+            "recommendation": "Unable to connect to Google Gemini API. Please check your API key in Settings.",
             "breakdown": ["Check Ollama connection", "Pull the required model", "Retry task"]
         }
 
@@ -339,7 +335,7 @@ def chat_with_ai(req: ChatRequest):
         return {"reply": response['message']['content']}
     except Exception as e:
         print(f"Ollama Chat Error: {e}")
-        return {"reply": "I'm having trouble connecting to my local brain. Ensure Ollama is running."}
+        return {"reply": "I'm having trouble connecting to Gemini. Please check your API key in Settings."}
 
 class PlannerChatRequest(BaseModel):
     messages: List[ChatMessage]
@@ -393,7 +389,7 @@ def planner_chat(req: PlannerChatRequest):
         return {"reply": response['message']['content']}
     except Exception as e:
         print(f"Ollama Chat Error: {e}")
-        return {"reply": "I'm having trouble connecting to the local brain. Ensure Ollama is running."}
+        return {"reply": "I'm having trouble connecting to Gemini. Please check your API key in Settings."}
 
 @app.post("/api/interrogation_chat")
 def interrogation_chat(req: PlannerChatRequest):
@@ -433,7 +429,7 @@ def interrogation_chat(req: PlannerChatRequest):
         return {"reply": response['message']['content']}
     except Exception as e:
         print(f"Ollama Chat Error: {e}")
-        return {"reply": "I'm having trouble connecting to the local brain. Ensure Ollama is running."}
+        return {"reply": "I'm having trouble connecting to Gemini. Please check your API key in Settings."}
 
 class UploadSchedulePayload(BaseModel):
     image_base64: str
