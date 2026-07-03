@@ -2,7 +2,7 @@
 
 Trackly (formerly ActionMate AI) is a ruthless, autonomous productivity application designed for extreme procrastinators. 
 
-## 🏆 Gemini API Developer Competition Submission
+## 🏆 Google Vibe2Ship hackathon Submission
 This project is powered entirely by **Google's Gemini 2.5 Flash** model, utilizing its lightning-fast multimodal reasoning capabilities to act as a task planner, an image-verifying habit judge, and a ruthless accountability coach.
 
 **🔗 Live Deployed Link:** [https://actionmate-ai-79bd2.web.app](https://actionmate-ai-79bd2.web.app)  
