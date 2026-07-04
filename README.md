@@ -5,7 +5,7 @@ Trackly (formerly ActionMate AI) is a ruthless, autonomous productivity applicat
 ## 🏆 Gemini API Developer Competition Submission
 This project is powered entirely by **Google's Gemini 2.5 Flash** model, utilizing its lightning-fast multimodal reasoning capabilities to act as a task planner, an image-verifying habit judge, and a ruthless accountability coach.
 
-**🔗 Live Deployed Link:** [https://actionmate-ai-79bd2.web.app](https://actionmate-ai-79bd2.web.app)  
+**🔗 Live Deployed Link:** [https://trackly-ai.web.app](https://trackly-ai.web.app)  
 *(Frontend hosted on Google Firebase, AI Backend hosted on Hugging Face Spaces. The live backend securely hosts our Gemini API key, so you can test the AI immediately without any setup!)*
 
 ## 🚨 The Problem
@@ -29,45 +29,20 @@ Additionally, Trackly features **Visual Habit Verification**. Instead of simply 
 
 ---
 
-## 🚀 How to Run It Locally (For Judges)
+## 🚀 How to Test the Project (For Judges)
 
-While the app is deployed live, you can easily run it on your local machine to test the Chrome Extension feature.
+Because the app is fully deployed and securely hosts its own Gemini API key, you **do not** need to install Python, Node, or run any servers locally! You simply need to install our custom Chrome Extension to test the website blocking features.
 
-### Prerequisites
-1. **Node.js & npm**
-2. **Python 3.10+**
-3. **Gemini API Key** (from Google AI Studio)
-
-### Step 1: Start the Backend
-Open a terminal in the project root:
-```bash
-cd backend
-python3 -m venv venv
-source venv/bin/activate  # On Windows use: venv\Scripts\activate
-pip install -r requirements.txt
-
-# Set your Gemini API key
-export GEMINI_API_KEY="your_api_key_here"
-
-# Start the server
-uvicorn main:app --host 0.0.0.0 --port 8000
-```
-
-### Step 2: Start the Frontend
-In a new terminal:
-```bash
-cd frontend
-npm install
-npm run dev
-```
-The website will now be live at `http://localhost:5173`.
-
-### Step 3: Install the Chrome Enforcer
-To enable the website blocking feature:
+### Step 1: Install the Chrome Enforcer
+To enable the nuclear lockdown website blocking feature:
 1. Open Google Chrome (or Brave/Edge).
 2. Navigate to `chrome://extensions/` in your URL bar.
 3. Toggle on **"Developer mode"** in the top right corner.
 4. Click the **"Load unpacked"** button in the top left.
 5. Select the `extension/` folder located inside this project directory.
 
-You're done! Create a task, set the deadline for 1 minute ago, assign `youtube.com` to the blocked sites, and watch the system go nuclear!
+### Step 2: Test the Application
+1. Open the Live Web App: [https://trackly-ai.web.app](https://trackly-ai.web.app)
+2. Log in and complete the AI Onboarding to generate your first tasks.
+3. **Trigger a Lockdown:** Create a new task, set the deadline for *1 minute ago*, assign `youtube.com` (or any site) to the blocked sites list, and try to visit that website in a new tab. 
+4. Watch the system instantly block you and force you into an AI interrogation!

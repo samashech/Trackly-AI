@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "site": "trackly-ai",
     "public": "dist",
     "ignore": [
       "firebase.json",

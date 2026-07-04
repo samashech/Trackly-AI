@@ -80,7 +80,7 @@ function injectWarningBanner(taskTitle, minsLeft) {
 // Function to fetch overdue tasks and warning tasks from backend
 async function getTaskStates() {
   try {
-    const response = await fetch('http://localhost:8000/api/tasks');
+    const response = await fetch('https://samash-samashech-cal.hf.space/api/tasks');
     const tasks = await response.json();
     
     const now = new Date();
@@ -178,7 +178,7 @@ function handleTabChange(tab) {
   if (activeTabDomain && activeTabStartTime) {
     const elapsedSeconds = Math.floor((now - activeTabStartTime) / 1000);
     if (elapsedSeconds > 0) {
-      fetch('http://localhost:8000/api/usage', {
+      fetch('https://samash-samashech-cal.hf.space/api/usage', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ domain: activeTabDomain, seconds: elapsedSeconds })
@@ -229,7 +229,7 @@ setInterval(() => {
     const now = Date.now();
     const elapsedSeconds = Math.floor((now - activeTabStartTime) / 1000);
     if (elapsedSeconds >= 10) { 
-      fetch('http://localhost:8000/api/usage', {
+      fetch('https://samash-samashech-cal.hf.space/api/usage', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ domain: activeTabDomain, seconds: elapsedSeconds })
